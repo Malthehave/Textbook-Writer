@@ -4,7 +4,7 @@ One manager agent compiles a source-grounded textbook: specialists via `Agent.as
 
 ## Run (hot reload)
 
-Needs `OPENAI_API_KEY` in `.env` (see `.env.example`). For PDF publish on the host: `brew install typst poppler`.
+Needs `OPENAI_API_KEY` in `.env` (see `.env.example`). Typst and poppler ship in the API image, so PDF publish works out of the box.
 
 ```bash
 npm run build   # first time / when Docker deps change
@@ -17,6 +17,13 @@ npm run dev     # day-to-day (hot reload)
 Also: `npm run down`, `npm run logs`, `npm test`. Edit `frontend/` or `src/` locally; containers pick up changes.
 
 ### Without Docker
+
+PDF publish shells out to `typst` and `pdftoppm`, so install them first — match the
+image's pinned Typst (`TYPST_VERSION` in `Dockerfile.api`) to keep output identical:
+
+```bash
+brew install typst poppler
+```
 
 ```bash
 uv sync
