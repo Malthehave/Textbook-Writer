@@ -40,6 +40,11 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
 
     messages: list[dict[str, Any]] = []
     pending_tools: dict[str, dict[str, Any]] = {}
+    # Parts stay addressable by call_id after they are flushed into a message.
+    # The dicts are held by reference, so a function_call_output arriving after
+    # a flush still updates the right card instead of creating an orphan named
+    # "tool" with empty input.
+    tool_parts: dict[str, dict[str, Any]] = {}
 
     def flush_assistant_tools() -> None:
         if not pending_tools:
@@ -89,18 +94,20 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
         if item_type == "function_call":
             call_id = str(item.get("call_id") or item.get("id") or uuid4().hex)
             name = str(item.get("name") or "tool")
-            pending_tools[call_id] = {
+            part = {
                 "type": "dynamic-tool",
                 "toolCallId": call_id,
                 "toolName": name,
                 "state": "input-available",
                 "input": _parse_args(item.get("arguments")),
             }
+            pending_tools[call_id] = part
+            tool_parts[call_id] = part
             continue
 
         if item_type == "function_call_output":
             call_id = str(item.get("call_id") or "")
-            part = pending_tools.get(call_id)
+            part = tool_parts.get(call_id)
             if part is None:
                 part = {
                     "type": "dynamic-tool",
@@ -110,6 +117,7 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
                     "input": {},
                 }
                 pending_tools[part["toolCallId"]] = part
+                tool_parts[part["toolCallId"]] = part
             part["state"] = "output-available"
             part["output"] = item.get("output", "")
             continue

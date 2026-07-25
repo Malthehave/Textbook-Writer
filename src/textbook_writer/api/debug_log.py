@@ -9,9 +9,21 @@ from pathlib import Path
 from typing import Any
 
 
+# Directories already created this process. Avoids a mkdir syscall per SSE
+# payload on the stream hot path (measurably worse on a Docker bind mount).
+_ensured_dirs: set[Path] = set()
+
+# Token-level deltas arrive in the thousands per run and add nothing the
+# surrounding lifecycle events don't already show. Logging them turns the
+# debug log into the most expensive thing in the stream loop.
+_SKIPPED_EVENT_TYPES = frozenset({"text-delta", "reasoning-delta"})
+
+
 def state_dir(workspace: Path) -> Path:
     path = workspace.resolve() / "state"
-    path.mkdir(parents=True, exist_ok=True)
+    if path not in _ensured_dirs:
+        path.mkdir(parents=True, exist_ok=True)
+        _ensured_dirs.add(path)
     return path
 
 
@@ -24,7 +36,10 @@ def error_log_path(workspace: Path) -> Path:
 
 
 def append_stream_event(workspace: Path, payload: dict[str, Any]) -> None:
-    """Append one compact SSE payload (no huge tool blobs)."""
+    """Append one compact SSE payload (no huge tool blobs, no token deltas)."""
+
+    if payload.get("type") in _SKIPPED_EVENT_TYPES:
+        return
 
     record = {
         "ts": datetime.now(UTC).isoformat(),

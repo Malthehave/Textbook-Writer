@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from textbook_writer.api.store import (
     read_artifact_text,
 )
 from textbook_writer.api.stream import stream_agent_run
+from textbook_writer.runtime.specialist_stream import bind_specialist_queue
 from textbook_writer.runtime.agents.manager import build_manager_agent
 from textbook_writer.runtime.workspace import initialize_workspace
 from textbook_writer.runtime import workspace as workspace_mod
@@ -228,6 +230,14 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     else:
         store.touch(session_id)
 
+    # The specialist queue must be bound BEFORE run_streamed(), which eagerly
+    # creates the run-loop task via asyncio.create_task(). A task snapshots the
+    # context at creation, so binding later (inside the stream generator) leaves
+    # on_stream callbacks looking at an unset ContextVar and silently dropping
+    # every nested specialist event.
+    specialist_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    bind_specialist_queue(specialist_queue)
+
     result = Runner.run_streamed(
         agent,
         user_text,
@@ -236,7 +246,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     )
 
     return StreamingResponse(
-        stream_agent_run(result, workspace=workspace),
+        stream_agent_run(result, queue=specialist_queue, workspace=workspace),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
