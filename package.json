@@ -1,0 +1,14 @@
+{
+  "name": "textbook-writer",
+  "description": "Textbook Writer web stack shortcuts",
+  "scripts": {
+    "dev": "docker compose up",
+    "build": "docker compose up --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "test": "uv run pytest",
+    "debug": "docker compose logs api --tail 200"
+  },
+  "type": "module",
+  "private": true
+}

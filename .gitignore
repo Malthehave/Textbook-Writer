@@ -1,0 +1,51 @@
+# --- Generated output -------------------------------------------------------
+# Everything under output/ is produced at runtime (books, snapshots, session
+# DBs, rendered PDFs). Never commit it.
+output/
+
+# --- Python -----------------------------------------------------------------
+.venv/
+.uv-cache/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# --- Node / frontend --------------------------------------------------------
+node_modules/
+frontend/dist/
+*.log
+
+# --- Secrets ----------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Local agent / tooling state --------------------------------------------
+.agents/
+agent-transcripts/
+.impeccable/
+.claude/
+.codex/
+.cursor/
+
+# --- Scratch ----------------------------------------------------------------
+tmp/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- OS / editor ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,46 @@
+{
+  "acquired_by_run": "run-live-test",
+  "acquisition_manifest_id": "manifest-live-test",
+  "allowed_hosts": [
+    "arxiv.org",
+    "docs.pytorch.org"
+  ],
+  "sources": [
+    {
+      "accepted_media_types": [
+        "text/html",
+        "text/plain"
+      ],
+      "max_bytes": 1000000,
+      "source": {
+        "accessed_at": "2024-01-01",
+        "authority": "official",
+        "authors": [],
+        "license_note": "test fixture",
+        "source_id": "source-pytorch-dist",
+        "source_type": "approved-product-source",
+        "title": "PyTorch Distributed Overview",
+        "url": "https://docs.pytorch.org/tutorials/beginner/dist_overview.html",
+        "year": 2024
+      }
+    },
+    {
+      "accepted_media_types": [
+        "text/html",
+        "application/pdf"
+      ],
+      "max_bytes": 1000000,
+      "source": {
+        "accessed_at": "2024-01-01",
+        "authority": "primary",
+        "authors": [],
+        "license_note": "test fixture",
+        "source_id": "source-ppo",
+        "source_type": "approved-product-source",
+        "title": "Proximal Policy Optimization Algorithms",
+        "url": "https://arxiv.org/abs/1707.06347",
+        "year": 2017
+      }
+    }
+  ]
+}
