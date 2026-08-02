@@ -29,7 +29,7 @@ def build_rasterize_html_diagram_tool(book_root: Path) -> FunctionTool:
         so you can see clipping, crowding, and math. Fix and re-rasterize if needed.
         """
 
-        html_rel, png_rel, digest = write_html_diagram(
+        html_rel, png_rel = write_html_diagram(
             workspace=workspace,
             figure_id=figure_id,
             html=html,
@@ -37,7 +37,7 @@ def build_rasterize_html_diagram_tool(book_root: Path) -> FunctionTool:
         png_bytes = (workspace / png_rel).read_bytes()
         data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
         return [
-            ToolOutputText(text=f"html={html_rel} png={png_rel} sha256={digest}"),
+            ToolOutputText(text=f"html={html_rel} png={png_rel}"),
             ToolOutputImage(image_url=data_url, detail="high"),
         ]
 

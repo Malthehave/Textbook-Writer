@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agents import ModelSettings
+from agents import ModelSettings, RunHooks
 from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
 
@@ -25,7 +25,10 @@ from textbook_writer.runtime.agents import (
     agent_capabilities,
     sandbox_tool_run_config,
 )
-from textbook_writer.runtime.workspace_tools import build_textbook_pdf_tool
+from textbook_writer.runtime.workspace_tools import (
+    build_textbook_pdf_tool,
+    validate_production_artifact_tool,
+)
 
 PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
@@ -34,6 +37,7 @@ def build_manager_agent(
     *,
     model: str = "gpt-5.6-luna",
     book_root: str | Path,
+    hooks: RunHooks[Any] | None = None,
 ) -> SandboxAgent[Any]:
     """Build the textbook manager bound to one chat's book directory."""
 
@@ -49,6 +53,7 @@ def build_manager_agent(
         ),
         tools=[
             build_textbook_pdf_tool(root),
+            validate_production_artifact_tool(root),
             build_research_architect_agent(model=model).as_tool(
                 tool_name="research-architect",
                 tool_description=(
@@ -58,6 +63,7 @@ def build_manager_agent(
                 ),
                 max_turns=48,
                 run_config=run_config,
+                hooks=hooks,
             ),
             build_curriculum_architect_agent(model=model).as_tool(
                 tool_name="curriculum-architect",
@@ -68,8 +74,13 @@ def build_manager_agent(
                 ),
                 max_turns=32,
                 run_config=run_config,
+                hooks=hooks,
             ),
-            build_chapter_writer_agent(model=model, book_root=root).as_tool(
+            build_chapter_writer_agent(
+                model=model,
+                book_root=root,
+                hooks=hooks,
+            ).as_tool(
                 tool_name="chapter-writer",
                 tool_description=(
                     "Write or revise production/chapters/<chapter_id>.json from plan slice "
@@ -79,6 +90,7 @@ def build_manager_agent(
                 ),
                 max_turns=64,
                 run_config=run_config,
+                hooks=hooks,
             ),
             build_chapter_reviewer_agent(model=model).as_tool(
                 tool_name="chapter-reviewer",
@@ -92,6 +104,7 @@ def build_manager_agent(
                 ),
                 max_turns=48,
                 run_config=run_config,
+                hooks=hooks,
             ),
             build_independent_verifier_agent(model=model).as_tool(
                 tool_name="independent-verifier",
@@ -103,6 +116,7 @@ def build_manager_agent(
                 ),
                 max_turns=48,
                 run_config=run_config,
+                hooks=hooks,
             ),
             build_solution_comparator_agent(model=model).as_tool(
                 tool_name="solution-comparator",
@@ -115,6 +129,7 @@ def build_manager_agent(
                 ),
                 max_turns=48,
                 run_config=run_config,
+                hooks=hooks,
             ),
         ],
         capabilities=agent_capabilities(__file__),

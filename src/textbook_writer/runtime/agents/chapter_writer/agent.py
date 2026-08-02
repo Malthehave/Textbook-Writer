@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agents import ModelSettings
+from agents import ModelSettings, RunHooks
 from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
 
@@ -18,7 +18,12 @@ from textbook_writer.runtime.agents import (
 PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
-def build_chapter_writer_agent(*, model: str, book_root: str | Path) -> SandboxAgent[Any]:
+def build_chapter_writer_agent(
+    *,
+    model: str,
+    book_root: str | Path,
+    hooks: RunHooks[Any] | None = None,
+) -> SandboxAgent[Any]:
     root = Path(book_root)
     run_config = sandbox_tool_run_config(root=root)
     return SandboxAgent(
@@ -40,6 +45,7 @@ def build_chapter_writer_agent(*, model: str, book_root: str | Path) -> SandboxA
                 ),
                 max_turns=32,
                 run_config=run_config,
+                hooks=hooks,
             ),
         ],
         capabilities=agent_capabilities(__file__),

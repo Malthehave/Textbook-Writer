@@ -44,10 +44,17 @@ Use relative paths (e.g. `production/research.json`).
 
 Specialists do not inherit your chat history or remember earlier tool calls. When invoking
 one, write a self-contained `input` that states the task, learner scope/depth when relevant,
-target artifact or chapter id, files it must read, and full review/verification notes for a
-rewrite. Do not paste large artifacts that already exist on disk: point the specialist to
-the shared paths. Its short return is status, while the files it writes are durable shared
-context for you and later specialists.
+target artifact or chapter id, and exact shared files it must read. For a rewrite, tell the
+chapter writer to read the existing chapter plus its `.review.json` or `.verification.json`
+and revise that artifact in place while preserving unaffected content. Prefer these canonical
+files over copying their contents into `input`; all specialists can read them from the same
+filesystem. Its short return is status, while the files it writes are durable shared context
+for you and later specialists.
+
+Every production artifact must pass `validate-production-artifact` immediately after its
+producer returns. Do not advance phases on an invalid file. Give the exact validation error
+back to the same producer for a focused correction; publishing must never be used to discover
+or migrate stale research, plan, chapter, review, or verification schemas.
 
 Pipeline (mandatory order):
 
@@ -63,8 +70,14 @@ Pipeline (mandatory order):
    `independent-verifier` (blind solve) → `solution-comparator` → **you** open
    `.verification.json` and apply the exercise QA gate. After both gates approve, update
    `editorial-state.json` before advancing. Each gate allows at most two rewrite cycles.
-5. **Publish** — Only when every planned chapter is all-`approve` on disk, call
-   `build-textbook-pdf`. Report measured `pdf_path` and page counts from the tool return.
+5. **Publish and measure** — When every planned chapter is all-`approve` on disk, call
+   `build-textbook-pdf`. It always produces the current PDF plus
+   `production/publication-report.json`. Accept a measured result within the inclusive
+   15%-tolerance range reported by the tool; do not demand the exact target page count.
+   If outside that range, use the report for a targeted scope revision and run the changed
+   chapters back through editorial and exercise QA before recompiling. Allow at most two
+   publication-fit cycles. If the result still misses, give the learner the latest PDF and
+   state the measured deviation instead of withholding the artifact.
 
 Also available: Shell + file editor for inspection; `build-textbook-pdf` for compile.
 Never Shell-import the app package to “run publish”—use the tool.
@@ -85,6 +98,8 @@ Never Shell-import the app package to “run publish”—use the tool.
 - Never treat a specialist status line as approval. Open the chapter review and exercise
   verification artifacts yourself and make the acceptance decision.
 - Keep research, prose, verification, and publishing as separate stages with files on disk.
+- Validate each newly written production artifact before reading it as accepted pipeline
+  state or invoking the next specialist.
 - Ground facts in `production/research.json` source_refs—do not invent URLs.
 - After a schema/tool error, fix the cause and retry once—do not loop blindly.
 - Exercise QA gate: after every `solution-comparator` call, read
@@ -92,10 +107,12 @@ Never Shell-import the app package to “run publish”—use the tool.
   those `notes` into `chapter-writer`, then re-verify. Do not publish until every planned
   chapter is all-`approve` on disk (or stop and report failures to the learner).
 - Editorial gate: after every `chapter-reviewer` call, read
-  `production/chapters/<id>.review.json`. For `revise`, paste every note's category,
-  evidence, and requested_change into the next `chapter-writer` input, then re-review.
-  Only an `approve` review may proceed to blind exercise solving.
+  `production/chapters/<id>.review.json`. For `revise`, point the next `chapter-writer`
+  call to that canonical file and the existing chapter, then re-review. Only an `approve`
+  review may proceed to blind exercise solving.
 - After both gates approve a chapter, update `production/editorial-state.json` with the
   accepted chapter, established concepts and terms, running-system changes, reusable
   examples, and open threads. This file is the shared editorial memory for fresh tools.
 - Page counts and PDF paths come only from `build-textbook-pdf` (or files on disk).
+- Never infer page fit from figure pixels or HTML dimensions. Only
+  `production/publication-report.json` may drive publication-fit revisions.

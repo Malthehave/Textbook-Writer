@@ -34,7 +34,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -159,12 +158,16 @@ function SessionsSidebar({
   const { isMobile, setOpenMobile } = useSidebar()
 
   return (
-    <Sidebar collapsible="offcanvas" className="top-14 bottom-0">
-      <SidebarHeader>
-        <SidebarGroupLabel className="px-2">Sessions</SidebarGroupLabel>
+    <Sidebar
+      collapsible="offcanvas"
+      variant="floating"
+      className="top-14 bottom-0 z-20 py-3 pl-3 pr-0"
+    >
+      <SidebarHeader className="px-2 pt-0 pb-1">
+        <span className="px-2 text-xs font-medium text-mist">Sessions</span>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-0 py-0">
           <SidebarGroupContent>
             <SidebarMenu>
               {!sessionsReady ? (
@@ -177,7 +180,7 @@ function SessionsSidebar({
                   </SidebarMenuItem>
                 </>
               ) : sessions.length === 0 ? (
-                <p className="px-2 py-3 text-sm text-sidebar-foreground/70">
+                <p className="px-2 py-3 text-sm text-mist">
                   No books yet. Start one to open the manager.
                 </p>
               ) : (
@@ -188,7 +191,7 @@ function SessionsSidebar({
                       size="lg"
                       isActive={session.id === sessionId}
                       tooltip={session.title}
-                      className="h-auto items-start py-2"
+                      className="h-auto items-start rounded-[var(--radius-md)] py-2 hover:bg-muted hover:text-foreground data-active:bg-surface data-active:text-foreground data-active:shadow-sm data-active:hover:bg-surface"
                       onClick={() => {
                         onSelect(session.id)
                         if (isMobile) setOpenMobile(false)
@@ -196,7 +199,7 @@ function SessionsSidebar({
                     >
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
                         <span className="truncate font-medium">{session.title}</span>
-                        <span className="truncate font-mono text-xs text-muted-foreground">
+                        <span className="truncate font-mono text-xs text-mist">
                           {session.id}
                         </span>
                       </div>
@@ -208,7 +211,7 @@ function SessionsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="px-2 pb-0">
         <Button className="w-full" onClick={onNewBook} disabled={busy} size="sm">
           <PlusIcon />
           {busy ? 'Starting…' : 'New book'}
@@ -544,7 +547,7 @@ export default function App() {
   )
 
   return (
-    <SidebarProvider className="h-svh">
+    <SidebarProvider className="h-svh bg-paper">
       {/* Full-width header so SidebarTrigger never shifts with the rail */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border/70 bg-background px-3">
         <div className="flex min-w-0 items-center gap-2">

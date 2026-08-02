@@ -54,16 +54,25 @@ Prefer `docker compose logs api` for live runs.
    → independent verifier → solution comparator → manager exercise gate. Each gate rewrites
    with exact notes (max two fix cycles). Accepted chapters advance
    `production/editorial-state.json` so fresh specialist runs inherit the book arc.
-5. `build-textbook-pdf` → assemble `book.json` + Typst PDF (measured page counts only)
+5. `build-textbook-pdf` → assemble `book.json` + Typst PDF and write
+   `production/publication-report.json`. Accept the requested page target within an
+   inclusive ±15% measured tolerance (whole-page bounds round outward). If outside, make
+   at most two targeted scope revisions, re-run gates for changed chapters, and compile
+   again; never withhold the latest compiled PDF solely because fit still misses.
 
 Manager tools: `build-textbook-pdf`, research-architect, curriculum-architect, chapter-writer,
-chapter-reviewer, independent-verifier, solution-comparator. The chapter-writer owns
-html-diagram-author as a nested tool (author + illustrator).
+chapter-reviewer, independent-verifier, solution-comparator, and
+`validate-production-artifact`. The manager validates each canonical JSON artifact
+immediately after its producer returns, so PDF publication only assembles and compiles
+already-valid state. The chapter-writer owns html-diagram-author as a nested tool (author +
+illustrator); each figure uses one stable HTML path and one stable PNG path.
 Web discovery uses hosted `WebSearchTool` on the research architect only.
 
 Specialists are `Agent.as_tool()` calls: each invocation is a **fresh nested run** with the
 tool’s `input` string as the user message (no prior specialist chat history). Shared
 memory is that chat’s book directory plus whatever brief the manager puts in `input`.
+Only one manager run may be active per chat so overlapping requests cannot race on those
+shared files.
 
 ## Non-negotiable rules
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -58,7 +59,37 @@ def _tool_output(item: Any) -> Any:
     return getattr(raw, "output", None) or getattr(raw, "result", None) or ""
 
 
-async def stream_agent_run(result: Any) -> AsyncIterator[str]:
+def _book_cost_chunk(payload: dict[str, Any]) -> str:
+    return _sse(
+        {
+            "type": "data-book-cost",
+            "data": payload,
+            "transient": True,
+        }
+    )
+
+
+def _drain_cost_updates(
+    cost_updates: asyncio.Queue[dict[str, Any]] | None,
+) -> list[str]:
+    if cost_updates is None:
+        return []
+    chunks: list[str] = []
+    while True:
+        try:
+            update = cost_updates.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+        chunks.append(_book_cost_chunk(update))
+    return chunks
+
+
+async def stream_agent_run(
+    result: Any,
+    *,
+    cost_updates: asyncio.Queue[dict[str, Any]] | None = None,
+    initial_cost: dict[str, Any] | None = None,
+) -> AsyncIterator[str]:
     """Yield AI SDK UI-message-stream SSE chunks from Runner.run_streamed()."""
 
     message_id = f"msg_{uuid4().hex}"
@@ -87,9 +118,13 @@ async def stream_agent_run(result: Any) -> AsyncIterator[str]:
 
     yield _sse({"type": "start", "messageId": message_id})
     yield _sse({"type": "start-step"})
+    if initial_cost is not None:
+        yield _book_cost_chunk(initial_cost)
 
     try:
         async for event in result.stream_events():
+            for chunk in _drain_cost_updates(cost_updates):
+                yield chunk
             etype = getattr(event, "type", None)
 
             if etype == "raw_response_event":
@@ -177,6 +212,8 @@ async def stream_agent_run(result: Any) -> AsyncIterator[str]:
     for chunk in close_text():
         yield chunk
     for chunk in close_reasoning():
+        yield chunk
+    for chunk in _drain_cost_updates(cost_updates):
         yield chunk
     yield _sse({"type": "finish-step"})
     yield _sse({"type": "finish"})

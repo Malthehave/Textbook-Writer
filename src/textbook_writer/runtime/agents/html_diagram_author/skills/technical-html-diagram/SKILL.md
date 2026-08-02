@@ -62,8 +62,8 @@ Return one complete HTML document:
    another object, labels clipped or wrapped awkwardly, obscured arrowheads, crowded gaps,
    tiny type, broken math, and ambiguous reading order. Fix every visible defect and
    re-rasterize. Do not attach a figure until you have inspected a clean final render.
-8. **Attach** — use the returned `png=` path as `asset_path` and `sha256:<digest>` as
-   `content_sha256`, then write the chapter JSON.
+8. **Attach** — use the returned `png=` path as `asset_path`, then write the chapter JSON.
+   The renderer uses one stable HTML and PNG path per figure and replaces them on revision.
 
 ### Validation checklist (HTML plan + returned PNG)
 

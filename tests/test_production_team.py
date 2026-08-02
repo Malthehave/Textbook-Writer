@@ -63,6 +63,10 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     )
     assert "Google Technical Writing" in prose.read_text(encoding="utf-8")
     assert "Google Technical Writing" not in writer.instructions
+    assert "do not regenerate it from the plan" in writer.instructions
+    assert "On a rewrite, preserve existing figures and assets" in writer.instructions
+    assert "Do not estimate final PDF page usage" in reviewer.instructions
+    assert "only authority for page count" in reviewer.instructions
 
 
 def test_agent_capabilities_shell_filesystem_and_optional_skills() -> None:

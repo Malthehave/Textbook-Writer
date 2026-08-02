@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from agents import FunctionTool, function_tool
 from pydantic import BaseModel
@@ -22,6 +21,7 @@ from textbook_writer.runtime.pdf import book_output_stem, build_textbook_pdf_fil
 
 STAGES_DIRNAME = "production"
 BOOK_FILENAME = "book.json"
+PUBLICATION_REPORT_FILENAME = "publication-report.json"
 CHAPTERS_DIRNAME = "chapters"
 
 
@@ -32,10 +32,14 @@ def stages_dir(workspace: Path) -> Path:
 
 
 def write_model(path: Path, model: BaseModel) -> None:
+    write_json(path, model.model_dump(mode="json"))
+
+
+def write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
-        json.dumps(model.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     temporary.replace(path)
@@ -101,9 +105,52 @@ def _validate_figure_assets(workspace: Path, chapter: ProductChapter) -> None:
             raise RuntimeError(f"{figure.figure_id} asset must be a PNG")
         if not path.is_file():
             raise FileNotFoundError(f"figure asset missing at {path}")
-        digest = sha256(path.read_bytes()).hexdigest()
-        if digest != figure.content_sha256:
-            raise RuntimeError(f"{figure.figure_id} asset hash does not match chapter JSON")
+
+
+def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
+    relative = PurePosixPath(artifact_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("artifact path must be workspace-relative")
+    path = workspace.resolve() / Path(*relative.parts)
+    if not path.is_file():
+        raise FileNotFoundError(f"artifact missing at {artifact_path}")
+
+    if artifact_path == "production/research.json":
+        model: type[BaseModel] = Research
+    elif artifact_path == "production/book-plan.json":
+        model = ProductBookPlan
+    elif artifact_path == "production/editorial-state.json":
+        model = EditorialState
+    elif path.name.endswith(".review.json"):
+        model = ChapterReview
+    elif path.name.endswith(".verification.json"):
+        model = ExerciseVerification
+    elif relative.parent == PurePosixPath("production/chapters"):
+        model = ProductChapter
+    else:
+        raise ValueError(f"unsupported production artifact: {artifact_path}")
+
+    validated = model.model_validate_json(path.read_text(encoding="utf-8"))
+    if isinstance(validated, ProductChapter):
+        _validate_figure_assets(workspace, validated)
+    return model.__name__
+
+
+def validate_production_artifact_tool(book_root: Path) -> FunctionTool:
+    workspace = Path(book_root)
+
+    @function_tool(name_override="validate-production-artifact")
+    def validate_production_artifact(path: str) -> str:
+        """Validate one newly written production artifact against its canonical schema.
+
+        Call immediately after its producing specialist returns. Supports research, plan,
+        editorial state, chapter, chapter review, and exercise verification JSON.
+        """
+
+        model_name = _validate_production_artifact(workspace, path)
+        return f"valid={path} schema={model_name}"
+
+    return validate_production_artifact
 
 
 def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
@@ -124,9 +171,13 @@ def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
             book_path=stages_dir(workspace) / BOOK_FILENAME,
             output_path=pdf_path,
         )
+        write_json(stages_dir(workspace) / PUBLICATION_REPORT_FILENAME, report)
+        fit = "within-tolerance" if report["within_tolerance"] else "outside-tolerance"
         return (
             f"title={report['title']} pdf={report['pdf_path']} "
-            f"pages={report['actual_pages']} (plan target {report['target_pages']})"
+            f"pages={report['actual_pages']} target={report['target_pages']} "
+            f"allowed={report['minimum_pages']}-{report['maximum_pages']} status={fit} "
+            f"report=production/{PUBLICATION_REPORT_FILENAME}"
         )
 
     return build_textbook_pdf

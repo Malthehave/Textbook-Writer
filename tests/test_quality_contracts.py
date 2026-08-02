@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -24,7 +23,11 @@ from textbook_writer.models.product import (
     Research,
     ResearchedTopic,
 )
-from textbook_writer.runtime.workspace_tools import _assemble_book, write_model
+from textbook_writer.runtime.workspace_tools import (
+    _assemble_book,
+    _validate_production_artifact,
+    write_model,
+)
 
 
 def _research() -> Research:
@@ -121,7 +124,7 @@ def _exercises(count: int = 3) -> list[ProductExercise]:
     ]
 
 
-def _chapter(*, exercise_count: int = 3, visual: bool = True, digest: str = "digest") -> ProductChapter:
+def _chapter(*, exercise_count: int = 3, visual: bool = True) -> ProductChapter:
     return ProductChapter(
         chapter_id="chapter-1",
         title="See the Queue",
@@ -149,7 +152,6 @@ def _chapter(*, exercise_count: int = 3, visual: bool = True, digest: str = "dig
                     section_ref="section-1",
                     html="<div id=\"diagram\"></div>",
                     asset_path="assets/figures/visual-1.png",
-                    content_sha256=digest,
                 )
             ]
             if visual
@@ -214,19 +216,16 @@ def test_product_book_enforces_planned_exercises_visuals_and_approval() -> None:
         )
 
 
-def test_assemble_requires_editorial_acceptance_and_valid_figure_hash(
-    tmp_path: Path,
-) -> None:
+def test_assemble_requires_editorial_acceptance_and_existing_figure(tmp_path: Path) -> None:
     stages = tmp_path / "production"
     chapters = stages / "chapters"
     asset = tmp_path / "assets" / "figures" / "visual-1.png"
     asset.parent.mkdir(parents=True)
     asset.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
-    digest = sha256(asset.read_bytes()).hexdigest()
 
     write_model(stages / "research.json", _research())
     write_model(stages / "book-plan.json", _plan())
-    write_model(chapters / "chapter-1.json", _chapter(digest=digest))
+    write_model(chapters / "chapter-1.json", _chapter())
     write_model(
         chapters / "chapter-1.review.json",
         ChapterReview(
@@ -241,9 +240,21 @@ def test_assemble_requires_editorial_acceptance_and_valid_figure_hash(
         EditorialState(accepted_chapter_refs=["chapter-1"]),
     )
 
-    assembled = _assemble_book(tmp_path)
-    assert assembled.chapters[0].figures[0].content_sha256 == digest
+    assert _validate_production_artifact(tmp_path, "production/research.json") == "Research"
+    assert (
+        _validate_production_artifact(
+            tmp_path, "production/chapters/chapter-1.review.json"
+        )
+        == "ChapterReview"
+    )
+    assert (
+        _validate_production_artifact(tmp_path, "production/chapters/chapter-1.json")
+        == "ProductChapter"
+    )
 
-    write_model(chapters / "chapter-1.json", _chapter(digest="wrong"))
-    with pytest.raises(RuntimeError, match="asset hash"):
+    assembled = _assemble_book(tmp_path)
+    assert assembled.chapters[0].figures[0].asset_path == "assets/figures/visual-1.png"
+
+    asset.unlink()
+    with pytest.raises(FileNotFoundError, match="figure asset missing"):
         _assemble_book(tmp_path)

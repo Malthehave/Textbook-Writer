@@ -44,9 +44,14 @@ not grade their own exercises).
 | `production/chapters/<id>.answers.json` | Blind solve |
 | `production/chapters/<id>.verification.json` | Grade |
 | `production/book.json` | Assembled book |
+| `production/publication-report.json` | Measured page fit from the latest compile |
 | `build/<slug>.pdf` | Measured PDF |
 
 Before re-running a stage, `ls production/`. Resume from disk when a good artifact exists.
+After any specialist writes a canonical JSON artifact, call
+`validate-production-artifact` on that path before advancing. A validation failure belongs
+to that producing stage: give the exact error back to the same specialist and validate its
+correction. Never defer schema or figure-path validation until PDF publication.
 
 ## Phase order (mandatory)
 
@@ -62,13 +67,15 @@ deep, with focused, applied, and synthesis practice rather than one omnibus prom
 
 ### B — Research
 `research-architect` → `research.json` (web search; follow `$research`).
-The architect owns finding real sources.
+The architect owns finding real sources. Validate `production/research.json`.
 
 ### C — Curriculum
 `curriculum-architect` → `book-plan.json` (include `target_pages` from the agreed
 scope). Inspect chapter order, total target words, exercise counts/assessment briefs, and
 visual purposes before accepting it. If the plan is weak, edit the JSON or re-run the
 architect with a short fix brief—no separate auditor/repair agents.
+Validate `production/book-plan.json` before creating editorial state, then validate
+`production/editorial-state.json`.
 
 Create `production/editorial-state.json` after accepting the plan:
 
@@ -85,11 +92,12 @@ Create `production/editorial-state.json` after accepting the plan:
 
 ### D — Per chapter (plan order)
 1. `chapter-writer` → chapter JSON **and** its figures (author calls the diagrammer)
-2. `chapter-reviewer` → `production/chapters/<id>.review.json`
-3. **Editorial gate (mandatory — never skip)** — open the review file yourself.
-4. `independent-verifier` — answer-free exercises only (blind QA; you commission this)
-5. `solution-comparator` → `production/chapters/<id>.verification.json`
-6. **Exercise QA gate (mandatory — never skip)** — open the verification file with Shell/file
+2. Validate the chapter JSON and referenced figure files
+3. `chapter-reviewer` → `production/chapters/<id>.review.json`, then validate the review
+4. **Editorial gate (mandatory — never skip)** — open the review file yourself.
+5. `independent-verifier` — answer-free exercises only (blind QA; you commission this)
+6. `solution-comparator` → `production/chapters/<id>.verification.json`, then validate it
+7. **Exercise QA gate (mandatory — never skip)** — open the verification file with Shell/file
    editor and inspect every `verdicts[].decision`:
 
 #### Editorial gate
@@ -98,19 +106,22 @@ The reviewer is evidence, not the decision-maker. Inspect `decision`, `summary`,
 note. Confirm the draft fits the full plan and accepted book, not only its own chapter brief.
 
 If the decision is `revise`, do **not** run exercise QA. Call `chapter-writer` with the
-chapter id and every note's `category`, full `evidence`, and full `requested_change`. Re-run
-`chapter-reviewer` and reopen the file. Allow at most two editorial rewrite cycles after the
-initial draft. If it still does not approve, stop and report the unresolved notes.
+chapter id and instruct it to read the existing chapter JSON and its `.review.json` from the
+shared filesystem, revise the chapter in place, and preserve everything unaffected by the
+notes. The review file is the canonical brief; do not duplicate all of its contents into the
+tool input. Re-run `chapter-reviewer` and reopen the file. Allow at most two editorial
+rewrite cycles after the initial draft. If it still does not approve, stop and report the
+unresolved notes.
 
 If the decision is `approve`, proceed to blind exercise QA.
 
 #### If any verdict is `reject` or `revise`
 Do **not** advance to the next chapter or to publish.
 
-1. Build a rewrite brief from the verification file: for each non-`approve` verdict, include
-   `exercise_ref`, `decision`, `result`, `ambiguity`, and the full `notes` text.
-2. Call `chapter-writer` with that brief in the tool `input` (plus chapter id / plan slice).
-   The author must fix those defects; do not paraphrase away the notes.
+1. Open the verification file and confirm every non-`approve` verdict is actionable.
+2. Call `chapter-writer` with the chapter id and exact existing chapter and
+   `.verification.json` paths. Tell it to read both shared files, revise in place, preserve
+   unaffected content, and fix every non-`approve` verdict without paraphrasing away notes.
 3. Re-run `independent-verifier` (fresh answers file).
 4. Re-run `solution-comparator`.
 5. Re-open `.verification.json`. Repeat the gate.
@@ -135,8 +146,28 @@ on disk counts.
 
 ### E — Publish
 Only after **every** planned chapter has an all-`approve` `.verification.json` on disk.
-Call `build-textbook-pdf`. Tell the learner the measured `pdf_path` / page counts from the
-tool return. Never invent page counts.
+Call `build-textbook-pdf`. It writes the PDF and `production/publication-report.json`.
+
+The requested page count is a target, not an exact hard limit. Accept any actual page count
+inside the report's inclusive 15%-tolerance range. This range uses whole-page outward
+rounding, so a six-page target accepts five through seven pages.
+
+If the measured result is outside the range:
+
+1. Keep the compiled PDF; it remains a usable artifact while fit is corrected.
+2. Read `production/publication-report.json` and identify the smallest scope correction.
+3. Call the affected `chapter-writer` with the existing chapter path and report path. Ask
+   for a targeted in-place length revision, preserving approved substance and figures.
+4. Re-run editorial review and blind exercise QA for every changed chapter, update
+   editorial state, and compile again.
+
+Allow at most two publication-fit correction cycles. If the PDF still falls outside the
+range, stop revising, give the learner the latest PDF, and report its measured page count
+and deviation honestly. Never withhold an already compiled PDF solely because it missed
+the target.
+
+Do not estimate page consumption from PNG pixels, HTML dimensions, word-count arithmetic,
+or a reviewer's visual guess. Only the measured publication report determines page fit.
 
 ## Error recovery
 

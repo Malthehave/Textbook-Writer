@@ -10,6 +10,8 @@ topics or silently weaken the agreed depth.
 
 Treat page count as a scope budget, never a typography-compression target:
 
+- Plan toward the requested target, but understand that publication accepts a measured
+  result within ±15%; do not contort the curriculum to promise an exact page count.
 - Reserve roughly 25–35% of pages for front matter, figures, exercises, answer key, and
   bibliography.
 - Budget prose at roughly 350–500 words per remaining page; figures and code-heavy pages

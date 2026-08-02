@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -21,6 +22,7 @@ BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 DISPLAY_MATH_RE = re.compile(r"\$\$(.+?)\$\$|\\\[(.+?)\\\]", flags=re.DOTALL)
 INLINE_PAREN_MATH_RE = re.compile(r"\\\((.+?)\\\)")
 MITEX_IMPORT = '#import "@preview/mitex:0.2.6": *'
+PAGE_TOLERANCE_RATIO = 0.15
 
 
 def book_output_stem(title: str, *, max_length: int = 80) -> str:
@@ -119,6 +121,14 @@ def pdf_page_count(path: Path) -> int:
     return len(PdfReader(path.resolve()).pages)
 
 
+def target_page_range(target_pages: int) -> tuple[int, int]:
+    """Return inclusive integer page bounds with 15% tolerance."""
+
+    lower = max(1, math.floor(target_pages * (1 - PAGE_TOLERANCE_RATIO)))
+    upper = math.ceil(target_pages * (1 + PAGE_TOLERANCE_RATIO))
+    return lower, upper
+
+
 def build_textbook_pdf_file(*, book_path: Path, output_path: Path) -> dict[str, object]:
     """Compile book.json → PDF. Returns measured paths and page count."""
 
@@ -128,11 +138,16 @@ def build_textbook_pdf_file(*, book_path: Path, output_path: Path) -> dict[str, 
     _stage_figure_assets(book, book_path=book_path, output_path=output_path)
     compile_typst(render_product_book(book), output_path)
     pages = pdf_page_count(output_path)
+    minimum_pages, maximum_pages = target_page_range(book.plan.target_pages)
     return {
         "pdf_path": str(output_path),
         "typst_path": str(output_path.with_suffix(".typ")),
         "actual_pages": pages,
         "target_pages": book.plan.target_pages,
+        "minimum_pages": minimum_pages,
+        "maximum_pages": maximum_pages,
+        "within_tolerance": minimum_pages <= pages <= maximum_pages,
+        "tolerance_ratio": PAGE_TOLERANCE_RATIO,
         "title": book.plan.title,
         "chapter_count": len(book.chapters),
     }

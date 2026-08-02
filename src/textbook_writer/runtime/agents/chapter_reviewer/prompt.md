@@ -21,6 +21,13 @@ Judge the chapter against the book arc, not as an isolated article:
 - Its bridge, sections, worked examples, visual, summary, and exercises form one progression.
 - Its summary synthesizes rather than copying a section tail or leaking partial code.
 - Any promise to a later chapter is explicit, accurate, and represented in the plan.
+- Figures are pedagogically useful, visually legible, and proportionate to the chapter's
+  teaching purpose.
+
+Do not estimate final PDF page usage from PNG pixel dimensions, HTML stage dimensions, or
+fractional page allocations, and never reject a chapter solely on that basis. Typst
+compilation is the only authority for page count. You may flag excessive manuscript scope
+against the planned word target, but publication fit is handled after a measured compile.
 
 Write `production/chapters/<chapter_id>.review.json` with this exact shape:
 

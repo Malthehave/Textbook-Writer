@@ -6,11 +6,18 @@ import asyncio
 import json
 from typing import Any
 
+import pytest
 from agents import Agent
 from agents.items import ToolCallItem, ToolCallOutputItem
 from agents.stream_events import RawResponsesStreamEvent, RunItemStreamEvent
+from fastapi import HTTPException
 from openai.types.responses import ResponseTextDeltaEvent
 
+from textbook_writer.api.app import (
+    _claim_session_run,
+    _stream_session_run,
+    active_session_runs,
+)
 from textbook_writer.api.history import session_items_to_ui_messages
 from textbook_writer.api.stream import stream_agent_run
 
@@ -127,6 +134,25 @@ def test_completed_run_is_not_cancelled_on_teardown() -> None:
     asyncio.run(_drain(run))
     assert run.is_complete is True
     assert run.cancelled is False
+
+
+def test_session_run_is_exclusive_and_released_after_stream() -> None:
+    session_id = "session-exclusive"
+    active_session_runs.discard(session_id)
+    _claim_session_run(session_id)
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            _claim_session_run(session_id)
+        assert exc_info.value.status_code == 409
+
+        async def drain() -> None:
+            async for _ in _stream_session_run(FakeRun([_text_delta("done")]), session_id):
+                pass
+
+        asyncio.run(drain())
+        assert session_id not in active_session_runs
+    finally:
+        active_session_runs.discard(session_id)
 
 
 def test_history_keeps_tool_identity_when_prose_interleaves() -> None:

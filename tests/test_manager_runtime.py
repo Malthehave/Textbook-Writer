@@ -19,6 +19,7 @@ def test_manager_registers_lean_specialists(tmp_path: Path) -> None:
     }
     assert names == {
         "build-textbook-pdf",
+        "validate-production-artifact",
         "research-architect",
         "curriculum-architect",
         "chapter-writer",
@@ -44,9 +45,17 @@ def test_manager_enforces_editorial_gate_and_shared_state(tmp_path: Path) -> Non
     assert "fresh run" in agent.instructions
     assert "self-contained `input`" in agent.instructions
     assert "book filesystem" in agent.instructions
+    assert "copying their contents into `input`" in agent.instructions
+    assert "15%-tolerance range" in agent.instructions
+    assert "give the learner the latest PDF" in agent.instructions
+    assert "must pass `validate-production-artifact`" in agent.instructions
     skill = (
         Path(__file__).resolve().parents[1]
         / "src/textbook_writer/runtime/agents/manager/skills/manager-orchestration/SKILL.md"
     ).read_text(encoding="utf-8")
-    assert "at most two editorial rewrite cycles" in skill
+    assert "rewrite cycles after the initial draft" in skill
     assert "`production/editorial-state.json` before continuing" in skill
+    assert "The review file is the canonical brief" in skill
+    assert "six-page target accepts five through seven pages" in skill
+    assert "Do not estimate page consumption from PNG pixels" in skill
+    assert "Never defer schema or figure-path validation" in skill

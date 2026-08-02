@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { UIMessage } from "ai";
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
@@ -12,7 +13,7 @@ export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
+    className={cn("relative flex-1 overflow-hidden", className)}
     initial="smooth"
     resize="smooth"
     role="log"
@@ -20,19 +21,27 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
   />
 );
 
-export type ConversationContentProps = ComponentProps<
-  typeof StickToBottom.Content
->;
+export type ConversationContentProps = ComponentProps<"div">;
 
 export const ConversationContent = ({
   className,
+  children,
   ...props
-}: ConversationContentProps) => (
-  <StickToBottom.Content
-    className={cn("flex flex-col gap-8 p-4", className)}
-    {...props}
-  />
-);
+}: ConversationContentProps) => {
+  const { scrollRef, contentRef } = useStickToBottomContext();
+
+  return (
+    <ScrollArea className="h-full" viewportRef={scrollRef}>
+      <div
+        className={cn("flex flex-col gap-8 p-4", className)}
+        {...props}
+        ref={contentRef}
+      >
+        {children}
+      </div>
+    </ScrollArea>
+  );
+};
 
 export type ConversationEmptyStateProps = ComponentProps<"div"> & {
   title?: string;

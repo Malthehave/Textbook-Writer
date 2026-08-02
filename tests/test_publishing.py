@@ -11,6 +11,7 @@ from textbook_writer.runtime.pdf import (
     book_output_stem,
     compile_typst,
     markdown_to_typst_content,
+    target_page_range,
 )
 from textbook_writer.runtime.agents.html_diagram_author.render import write_html_diagram
 
@@ -19,6 +20,12 @@ def test_book_output_stem_slugs_title() -> None:
     assert book_output_stem("Reliable Agent Evaluation") == "reliable-agent-evaluation"
     assert book_output_stem("  Foo / Bar: Baz!  ") == "foo-bar-baz"
     assert book_output_stem("???") == "textbook"
+
+
+def test_target_page_range_uses_fifteen_percent_outward_rounding() -> None:
+    assert target_page_range(6) == (5, 7)
+    assert target_page_range(40) == (34, 46)
+    assert target_page_range(1) == (1, 2)
 
 
 def test_plain_text_keeps_blank_line_paragraph_breaks() -> None:
@@ -99,7 +106,7 @@ def test_html_diagram_rasterizes_to_png(tmp_path: Path) -> None:
       <p>Producer rate $R_a$ exceeds learner rate $R_l$.</p>
     </div>
     """
-    html_rel, png_rel, digest = write_html_diagram(
+    html_rel, png_rel = write_html_diagram(
         workspace=tmp_path,
         figure_id="queue-depth",
         html=html,
@@ -108,7 +115,8 @@ def test_html_diagram_rasterizes_to_png(tmp_path: Path) -> None:
     assert (tmp_path / html_rel).is_file()
     assert png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert png.stat().st_size > 2_000
-    assert len(digest) == 64
+    assert html_rel == "assets/figures/queue-depth.html"
+    assert png_rel == "assets/figures/queue-depth.png"
 
 
 def test_html_diagram_requires_diagram_root(tmp_path: Path) -> None:

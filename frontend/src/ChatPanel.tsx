@@ -7,6 +7,53 @@ import {
   type UIMessage,
 } from 'ai'
 import { BookOpenIcon } from 'lucide-react'
+
+type BookCostTotals = {
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cached_input_tokens: number
+  cache_write_tokens: number
+  cost_usd: number
+  unpriced_requests: number
+}
+
+type BookCostUpdate = {
+  currency: string
+  pricing_source: string
+  totals: BookCostTotals
+  by_model?: Record<string, BookCostTotals>
+  last_call?: {
+    agent: string
+    model: string
+    cost_usd: number | null
+    priced: boolean
+  } | null
+}
+
+function formatUsd(amount: number): string {
+  if (amount >= 1) return `$${amount.toFixed(2)}`
+  if (amount >= 0.01) return `$${amount.toFixed(3)}`
+  return `$${amount.toFixed(4)}`
+}
+
+function formatTokens(total: number): string {
+  if (total >= 1_000_000) return `${(total / 1_000_000).toFixed(1)}M tok`
+  if (total >= 1_000) return `${(total / 1_000).toFixed(1)}k tok`
+  return `${total} tok`
+}
+
+function isBookCostUpdate(value: unknown): value is BookCostUpdate {
+  if (!value || typeof value !== 'object') return false
+  const totals = (value as BookCostUpdate).totals
+  return (
+    !!totals &&
+    typeof totals === 'object' &&
+    typeof totals.cost_usd === 'number' &&
+    typeof totals.total_tokens === 'number'
+  )
+}
 import {
   Conversation,
   ConversationContent,
@@ -203,11 +250,33 @@ function ChatPanelReady({
     [],
   )
   const [input, setInput] = useState('')
+  const [bookCost, setBookCost] = useState<BookCostUpdate | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/sessions/${sessionId}/usage`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text())
+        return res.json() as Promise<unknown>
+      })
+      .then((payload) => {
+        if (!cancelled && isBookCostUpdate(payload)) setBookCost(payload)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
 
   const { messages, sendMessage, status, error, clearError, stop } = useChat({
     id: sessionId,
     messages: initialMessages,
     transport,
+    onData: (dataPart) => {
+      if (dataPart.type === 'data-book-cost' && isBookCostUpdate(dataPart.data)) {
+        setBookCost(dataPart.data)
+      }
+    },
     onError: () => {
       onActivity()
     },
@@ -244,11 +313,32 @@ function ChatPanelReady({
         ? 'Manager starting…'
         : 'Manager working…'
 
+  const costLabel =
+    bookCost == null
+      ? null
+      : bookCost.totals.requests === 0
+        ? 'Cost $0.00'
+        : `${formatUsd(bookCost.totals.cost_usd)} · ${formatTokens(bookCost.totals.total_tokens)}`
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 px-5 pb-2 pt-4">
-        <div className="truncate text-sm font-medium tracking-tight">{sessionTitle}</div>
-        <div className="text-xs text-mist">Manager conversation</div>
+      <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-4">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium tracking-tight">{sessionTitle}</div>
+          <div className="text-xs text-mist">Manager conversation</div>
+        </div>
+        {costLabel ? (
+          <div
+            className="shrink-0 rounded-[var(--radius-md)] bg-panel px-2 py-1 font-mono text-xs tabular-nums text-mist"
+            title={
+              bookCost?.last_call
+                ? `Last: ${bookCost.last_call.agent} · ${bookCost.last_call.model}`
+                : 'Estimated OpenAI API cost for this book'
+            }
+          >
+            {costLabel}
+          </div>
+        ) : null}
       </header>
 
       <Conversation className="min-h-0">

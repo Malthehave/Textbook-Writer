@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-from hashlib import sha256
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -54,7 +53,7 @@ async def _typeset_latex(page: Any) -> None:
     await page.wait_for_timeout(150)
 
 
-async def _render_html_to_png(html: str, png_path: Path) -> str:
+async def _render_html_to_png(html: str, png_path: Path) -> None:
     from playwright.async_api import async_playwright
 
     png_path = png_path.resolve()
@@ -77,15 +76,14 @@ async def _render_html_to_png(html: str, png_path: Path) -> str:
             raise ValueError("diagram HTML must contain exactly one #diagram element")
         await root.screenshot(path=str(png_path), type="png")
         await browser.close()
-    return sha256(png_path.read_bytes()).hexdigest()
 
 
 def write_html_diagram(
     *, workspace: Path, figure_id: str, html: str
-) -> tuple[str, str, str]:
+) -> tuple[str, str]:
     """Rasterize HTML → PNG, write both under assets/figures/.
 
-    Returns (html_rel, png_rel, sha256 hex).
+    Returns (html_rel, png_rel).
     """
 
     html = strip_html_code_fences(html)
@@ -93,11 +91,11 @@ def write_html_diagram(
     asset_dir = workspace / "assets" / "figures"
     asset_dir.mkdir(parents=True, exist_ok=True)
     tmp_png = asset_dir / f".tmp-{figure_id.replace('/', '-')}.png"
-    digest = asyncio.run(_render_html_to_png(html, tmp_png))
+    asyncio.run(_render_html_to_png(html, tmp_png))
     safe_id = figure_id.replace("/", "-")
-    html_rel = f"assets/figures/{safe_id}-{digest[:12]}.html"
-    png_rel = f"assets/figures/{safe_id}-{digest[:12]}.png"
+    html_rel = f"assets/figures/{safe_id}.html"
+    png_rel = f"assets/figures/{safe_id}.png"
     (workspace / html_rel).write_text(html, encoding="utf-8")
     (workspace / png_rel).write_bytes(tmp_png.read_bytes())
     tmp_png.unlink(missing_ok=True)
-    return html_rel, png_rel, digest
+    return html_rel, png_rel

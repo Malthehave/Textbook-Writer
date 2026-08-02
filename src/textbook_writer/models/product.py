@@ -137,7 +137,6 @@ class ProductFigure(Model):
     section_ref: str | None = None
     html: str = Field(min_length=1)
     asset_path: str = Field(min_length=1)
-    content_sha256: str
 
     @model_validator(mode="after")
     def validate_figure_payload(self) -> "ProductFigure":

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -30,6 +32,7 @@ from textbook_writer.runtime.agents import (
     session_book_root,
 )
 from textbook_writer.runtime.agents.manager import build_manager_agent
+from textbook_writer.runtime.usage_ledger import BookCostHooks, load_usage_summary
 
 load_dotenv()
 
@@ -39,6 +42,7 @@ SESSIONS_DB = Path(
 ).resolve()
 
 store = SessionStore(SESSIONS_DB)
+active_session_runs: set[str] = set()
 app = FastAPI(title="Textbook Writer API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -95,6 +99,33 @@ def _agent_session(row: SessionRow, book_root: Path) -> SQLiteSession:
     session_db = book_root / "state" / "product-sessions.sqlite"
     session_db.parent.mkdir(parents=True, exist_ok=True)
     return SQLiteSession(f"{row.id}-manager", db_path=session_db)
+
+
+async def _stream_session_run(
+    result: Any,
+    session_id: str,
+    *,
+    cost_updates: asyncio.Queue[dict[str, Any]] | None = None,
+    initial_cost: dict[str, Any] | None = None,
+) -> AsyncIterator[str]:
+    try:
+        async for chunk in stream_agent_run(
+            result,
+            cost_updates=cost_updates,
+            initial_cost=initial_cost,
+        ):
+            yield chunk
+    finally:
+        active_session_runs.discard(session_id)
+
+
+def _claim_session_run(session_id: str) -> None:
+    if session_id in active_session_runs:
+        raise HTTPException(
+            status_code=409,
+            detail="this book already has an active generation run",
+        )
+    active_session_runs.add(session_id)
 
 
 @app.get("/api/health")
@@ -161,6 +192,20 @@ def session_artifacts(session_id: str) -> list[dict[str, str | int]]:
     return list_artifacts(_book_root(session_id))
 
 
+@app.get("/api/sessions/{session_id}/usage")
+def session_usage(session_id: str) -> dict[str, Any]:
+    if store.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    summary = load_usage_summary(_book_root(session_id))
+    return {
+        "currency": summary["currency"],
+        "pricing_source": summary["pricing_source"],
+        "totals": summary["totals"],
+        "by_model": summary["by_model"],
+        "last_call": summary["calls"][-1] if summary["calls"] else None,
+    }
+
+
 @app.get("/api/sessions/{session_id}/artifacts/content")
 def session_artifact_content(
     session_id: str,
@@ -184,7 +229,12 @@ def session_pdf(session_id: str) -> FileResponse:
     pdf = find_pdf(_book_root(session_id))
     if pdf is None:
         raise HTTPException(status_code=404, detail="no PDF yet")
-    return FileResponse(pdf, media_type="application/pdf", filename=pdf.name)
+    return FileResponse(
+        pdf,
+        media_type="application/pdf",
+        filename=pdf.name,
+        content_disposition_type="inline",
+    )
 
 
 @app.get("/api/sessions/{session_id}/files/{file_path:path}")
@@ -209,28 +259,41 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     row = store.get(session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="session not found; create one first")
+    _claim_session_run(session_id)
 
-    book_root = _book_root(session_id)
-    user_text = _last_user_text(body.messages)
-    agent = build_manager_agent(book_root=book_root)
-    session = _agent_session(row, book_root)
+    cost_updates: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    try:
+        book_root = _book_root(session_id)
+        user_text = _last_user_text(body.messages)
+        cost_hooks = BookCostHooks(book_root=book_root, updates=cost_updates)
+        agent = build_manager_agent(book_root=book_root, hooks=cost_hooks)
+        session = _agent_session(row, book_root)
 
-    if row.title == "Untitled book" and user_text:
-        title = user_text.strip().splitlines()[0][:80]
-        store.touch(session_id, title=title)
-    else:
-        store.touch(session_id)
+        if row.title == "Untitled book" and user_text:
+            title = user_text.strip().splitlines()[0][:80]
+            store.touch(session_id, title=title)
+        else:
+            store.touch(session_id)
 
-    result = Runner.run_streamed(
-        agent,
-        user_text,
-        session=session,
-        max_turns=1000,
-        run_config=sandbox_tool_run_config(root=book_root),
-    )
+        result = Runner.run_streamed(
+            agent,
+            user_text,
+            session=session,
+            max_turns=1000,
+            hooks=cost_hooks,
+            run_config=sandbox_tool_run_config(root=book_root),
+        )
+    except Exception:
+        active_session_runs.discard(session_id)
+        raise
 
     return StreamingResponse(
-        stream_agent_run(result),
+        _stream_session_run(
+            result,
+            session_id,
+            cost_updates=cost_updates,
+            initial_cost=cost_hooks.snapshot(),
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
