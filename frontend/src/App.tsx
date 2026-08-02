@@ -4,12 +4,10 @@ import {
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
-  MenuIcon,
   PlusIcon,
 } from 'lucide-react'
 import { ChatPanel } from '@/ChatPanel'
 import { StreamError } from '@/components/ai-elements/stream-error'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -31,11 +29,23 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from '@/components/ui/resizable'
-import { useIsCompact } from '@/hooks/use-mobile'
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSkeleton,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from '@/components/ui/sidebar'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
 type Session = {
@@ -131,61 +141,80 @@ function buildArtifactTree(artifacts: Artifact[]): ArtifactTreeNode[] {
   return toNodes(root)
 }
 
-const softHandle =
-  'w-2 bg-transparent after:w-1 after:rounded-full after:bg-transparent hover:after:bg-foreground/10'
-
-function SessionList({
+function SessionsSidebar({
   sessions,
   sessionsReady,
   sessionId,
+  busy,
   onSelect,
+  onNewBook,
 }: {
   sessions: Session[]
   sessionsReady: boolean
   sessionId: string | null
+  busy: boolean
   onSelect: (id: string) => void
+  onNewBook: () => void
 }) {
-  if (!sessionsReady) {
-    return (
-      <div className="space-y-2 p-1">
-        <Skeleton className="h-14 w-full rounded-[var(--radius-md)]" />
-        <Skeleton className="h-14 w-full rounded-[var(--radius-md)]" />
-      </div>
-    )
-  }
-
-  if (sessions.length === 0) {
-    return (
-      <p className="px-2 py-4 text-sm text-mist">
-        No books yet. Start one to open the manager.
-      </p>
-    )
-  }
+  const { isMobile, setOpenMobile } = useSidebar()
 
   return (
-    <div className="space-y-0.5 px-1">
-      {sessions.map((session) => {
-        const active = session.id === sessionId
-        return (
-          <button
-            key={session.id}
-            type="button"
-            className={cn(
-              'flex w-full flex-col items-stretch gap-1 rounded-[var(--radius-md)] px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
-              active && 'bg-surface text-foreground shadow-sm hover:bg-surface',
-            )}
-            onClick={() => onSelect(session.id)}
-          >
-            <span className="text-sm font-medium break-words whitespace-normal">
-              {session.title}
-            </span>
-            <span className="font-mono text-xs text-mist break-all whitespace-normal">
-              {session.id}
-            </span>
-          </button>
-        )
-      })}
-    </div>
+    <Sidebar collapsible="offcanvas" className="top-14 bottom-0">
+      <SidebarHeader>
+        <SidebarGroupLabel className="px-2">Sessions</SidebarGroupLabel>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {!sessionsReady ? (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuSkeleton showIcon />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuSkeleton showIcon />
+                  </SidebarMenuItem>
+                </>
+              ) : sessions.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-sidebar-foreground/70">
+                  No books yet. Start one to open the manager.
+                </p>
+              ) : (
+                sessions.map((session) => (
+                  <SidebarMenuItem key={session.id}>
+                    <SidebarMenuButton
+                      type="button"
+                      size="lg"
+                      isActive={session.id === sessionId}
+                      tooltip={session.title}
+                      className="h-auto items-start py-2"
+                      onClick={() => {
+                        onSelect(session.id)
+                        if (isMobile) setOpenMobile(false)
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+                        <span className="truncate font-medium">{session.title}</span>
+                        <span className="truncate font-mono text-xs text-muted-foreground">
+                          {session.id}
+                        </span>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <Button className="w-full" onClick={onNewBook} disabled={busy} size="sm">
+          <PlusIcon />
+          {busy ? 'Starting…' : 'New book'}
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
   )
 }
 
@@ -336,7 +365,7 @@ export default function App() {
     FIRST VIEWPORT: Header + three columns; empty chat invites the first brief.
     FORM: Perimeter-rail staging inside a restrained operate system.
   */
-  const compact = useIsCompact()
+  const isMobile = useIsMobile()
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
@@ -347,7 +376,6 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionsReady, setSessionsReady] = useState(false)
-  const [sessionsOpen, setSessionsOpen] = useState(false)
   const [artifactsOpen, setArtifactsOpen] = useState(false)
 
   const refreshSessions = useCallback(async () => {
@@ -421,7 +449,6 @@ export default function App() {
       setSelectedArtifact(null)
       setPreviewOpen(false)
       setPreviewPdf(false)
-      setSessionsOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -434,7 +461,6 @@ export default function App() {
     setSelectedArtifact(null)
     setPreviewOpen(false)
     setPreviewPdf(false)
-    setSessionsOpen(false)
   }
 
   function selectArtifact(artifact: Artifact) {
@@ -492,25 +518,6 @@ export default function App() {
     </div>
   )
 
-  const sessionsRail = (
-    <div className="flex h-full min-h-0 flex-col rounded-[var(--radius-lg)] bg-panel px-2 py-3">
-      <div className="mb-3 flex items-center justify-between gap-2 px-2">
-        <span className="text-xs font-medium text-mist">Sessions</span>
-        <Badge variant="secondary" className="shrink-0 border-0 bg-surface text-mist">
-          {sessions.length}
-        </Badge>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <SessionList
-          sessions={sessions}
-          sessionsReady={sessionsReady}
-          sessionId={sessionId}
-          onSelect={selectSession}
-        />
-      </ScrollArea>
-    </div>
-  )
-
   const artifactsRail = (
     <div className="flex h-full min-h-0 flex-col rounded-[var(--radius-lg)] bg-panel px-2 py-3">
       <div className="mb-3 flex items-center justify-between gap-2 px-2">
@@ -537,20 +544,11 @@ export default function App() {
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 bg-paper p-3">
-      <header className="flex items-center justify-between gap-3 px-1 pt-1 sm:px-2">
+    <SidebarProvider className="h-svh">
+      {/* Full-width header so SidebarTrigger never shifts with the rail */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border/70 bg-background px-3">
         <div className="flex min-w-0 items-center gap-2">
-          {compact ? (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Open sessions"
-              onClick={() => setSessionsOpen(true)}
-            >
-              <MenuIcon />
-            </Button>
-          ) : null}
+          <SidebarTrigger className="shrink-0" />
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold tracking-tight text-ink">
               Textbook Writer
@@ -561,7 +559,7 @@ export default function App() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {compact ? (
+          {isMobile ? (
             <Button
               type="button"
               size="icon-sm"
@@ -579,54 +577,32 @@ export default function App() {
         </div>
       </header>
 
-      {error ? (
-        <div className="px-1">
-          <StreamError title="Could not reach the API" detail={error} onDismiss={() => setError(null)} />
+      <SessionsSidebar
+        sessions={sessions}
+        sessionsReady={sessionsReady}
+        sessionId={sessionId}
+        busy={busy}
+        onSelect={selectSession}
+        onNewBook={onNewBook}
+      />
+      <SidebarInset className="min-h-0 overflow-hidden bg-paper pt-14">
+        {error ? (
+          <div className="px-3 pt-3">
+            <StreamError title="Could not reach the API" detail={error} onDismiss={() => setError(null)} />
+          </div>
+        ) : null}
+
+        <div className="min-h-0 flex-1 p-3">
+          {isMobile ? (
+            <div className="h-full min-h-0">{chatSurface}</div>
+          ) : (
+            <div className="flex h-full min-h-0 gap-3">
+              <div className="min-w-0 flex-1">{chatSurface}</div>
+              <div className="w-[min(28rem,34%)] shrink-0">{artifactsRail}</div>
+            </div>
+          )}
         </div>
-      ) : null}
-
-      {compact ? (
-        <div className="min-h-0 flex-1">{chatSurface}</div>
-      ) : (
-        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-          {/* v4: numbers = px, strings = % */}
-          <ResizablePanel defaultSize="22" minSize={240} maxSize="34">
-            {sessionsRail}
-          </ResizablePanel>
-          <ResizableHandle className={softHandle} />
-          <ResizablePanel defaultSize="48" minSize={360}>
-            {chatSurface}
-          </ResizablePanel>
-          <ResizableHandle className={softHandle} />
-          <ResizablePanel defaultSize="30" minSize={280}>
-            {artifactsRail}
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      )}
-
-      <Sheet open={sessionsOpen} onOpenChange={setSessionsOpen}>
-        <SheetContent side="left" className="w-[min(20rem,92vw)] gap-0 p-0">
-          <SheetHeader className="border-b border-border/70 px-4 py-3">
-            <SheetTitle>Sessions</SheetTitle>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-hidden p-2">
-            <ScrollArea className="h-full">
-              <SessionList
-                sessions={sessions}
-                sessionsReady={sessionsReady}
-                sessionId={sessionId}
-                onSelect={selectSession}
-              />
-            </ScrollArea>
-          </div>
-          <div className="border-t border-border/70 p-3">
-            <Button className="w-full" onClick={onNewBook} disabled={busy} size="sm">
-              <PlusIcon />
-              {busy ? 'Starting…' : 'New book'}
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+      </SidebarInset>
 
       <Sheet open={artifactsOpen} onOpenChange={setArtifactsOpen}>
         <SheetContent side="right" className="w-[min(24rem,94vw)] gap-0 p-0">
@@ -674,6 +650,6 @@ export default function App() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </SidebarProvider>
   )
 }
