@@ -50,13 +50,14 @@ Prefer `docker compose logs api` for live runs.
 1. Chat → agree audience, depth, scope, length with the learner
 2. `research-architect` → `production/research.json` (web search; real HTTPS sources)
 3. `curriculum-architect` → book plan (`target_pages` from agreed scope)
-4. Per chapter: chapter-writer (incl. diagrams) → independent verifier → solution comparator,
-   then a mandatory QA gate on `.verification.json` (rewrite with pasted `notes` until
-   all-approve, max two fix cycles, or stop and report to the learner)
+4. Per chapter: chapter-writer (incl. diagrams) → chapter reviewer → manager editorial gate
+   → independent verifier → solution comparator → manager exercise gate. Each gate rewrites
+   with exact notes (max two fix cycles). Accepted chapters advance
+   `production/editorial-state.json` so fresh specialist runs inherit the book arc.
 5. `build-textbook-pdf` → assemble `book.json` + Typst PDF (measured page counts only)
 
 Manager tools: `build-textbook-pdf`, research-architect, curriculum-architect, chapter-writer,
-independent-verifier, solution-comparator. The chapter-writer owns
+chapter-reviewer, independent-verifier, solution-comparator. The chapter-writer owns
 html-diagram-author as a nested tool (author + illustrator).
 Web discovery uses hosted `WebSearchTool` on the research architect only.
 
@@ -83,7 +84,7 @@ memory is that chat’s book directory plus whatever brief the manager puts in `
 15. Page counts come only from the measured publication report.
 16. Runtime skills live under each agent’s `skills/` dir; they are not subject evidence.
 17. Manager instructions enforce a mandatory phase order (goal → research →
- curriculum → per-chapter write/diagram/verify → publish). Skills never expand
+ curriculum → per-chapter write/diagram/editorial-review/exercise-verify → publish). Skills never expand
  phase permissions.
 
 ## Skills
@@ -94,10 +95,11 @@ use the same session book directory as the manager.
 
 | Agent | Skill | Nested tools |
 |---|---|---|
-| manager | `manager-orchestration` | research, curriculum, chapter-writer, exercise QA, PDF |
+| manager | `manager-orchestration` | research, curriculum, chapter-writer, chapter-reviewer, exercise QA, PDF |
 | research-architect | `research` | — |
 | curriculum-architect | _(none)_ | — |
 | chapter-writer | `textbook-prose` | `html-diagram-author` |
+| chapter-reviewer | _(none)_ | — |
 | html-diagram-author | `technical-html-diagram` | — |
 | independent-verifier | `exercise-verification` | — |
 | solution-comparator | `exercise-verification` | — |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from agents import FunctionTool, function_tool
 from pydantic import BaseModel
 
 from textbook_writer.models.product import (
+    ChapterReview,
+    EditorialState,
     ExerciseVerification,
     ProductBook,
     ProductBookPlan,
@@ -53,9 +56,17 @@ def _assemble_book(workspace: Path) -> ProductBook:
     verifications: list[ExerciseVerification] = []
     for chapter_meta in plan.chapters:
         chapter_path = chapter_dir / f"{chapter_meta.chapter_id}.json"
-        chapters.append(
-            ProductChapter.model_validate_json(chapter_path.read_text(encoding="utf-8"))
+        chapter = ProductChapter.model_validate_json(
+            chapter_path.read_text(encoding="utf-8")
         )
+        chapters.append(chapter)
+        review_path = chapter_dir / f"{chapter_meta.chapter_id}.review.json"
+        review = ChapterReview.model_validate_json(review_path.read_text(encoding="utf-8"))
+        if review.chapter_ref != chapter_meta.chapter_id or review.decision != "approve":
+            raise RuntimeError(
+                f"{chapter_meta.chapter_id} needs an approved editorial review before publish"
+            )
+        _validate_figure_assets(workspace, chapter)
         verification_path = chapter_dir / f"{chapter_meta.chapter_id}.verification.json"
         if verification_path.is_file():
             verifications.append(
@@ -65,6 +76,13 @@ def _assemble_book(workspace: Path) -> ProductBook:
             )
     if len(verifications) != len(chapters):
         raise RuntimeError("every chapter needs a .verification.json before publish")
+    editorial_state = EditorialState.model_validate_json(
+        (stages / "editorial-state.json").read_text(encoding="utf-8")
+    )
+    accepted = set(editorial_state.accepted_chapter_refs)
+    planned = {chapter.chapter_id for chapter in plan.chapters}
+    if accepted != planned:
+        raise RuntimeError("editorial state must accept every planned chapter before publish")
     book = ProductBook(
         book_id=workspace.name,
         research=research,
@@ -76,6 +94,18 @@ def _assemble_book(workspace: Path) -> ProductBook:
     return book
 
 
+def _validate_figure_assets(workspace: Path, chapter: ProductChapter) -> None:
+    for figure in chapter.figures:
+        path = workspace / figure.asset_path
+        if path.suffix.lower() != ".png":
+            raise RuntimeError(f"{figure.figure_id} asset must be a PNG")
+        if not path.is_file():
+            raise FileNotFoundError(f"figure asset missing at {path}")
+        digest = sha256(path.read_bytes()).hexdigest()
+        if digest != figure.content_sha256:
+            raise RuntimeError(f"{figure.figure_id} asset hash does not match chapter JSON")
+
+
 def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
     workspace = Path(book_root)
 
@@ -83,7 +113,8 @@ def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
     def build_textbook_pdf() -> str:
         """Assemble production/*.json into book.json and compile the Typst PDF under build/.
 
-        Call only after every planned chapter has an all-approve .verification.json.
+        Call only after every planned chapter has an approved editorial review, an
+        all-approve exercise verification, and is accepted in editorial-state.json.
         Returns measured paths and page counts — never invent those yourself.
         """
 

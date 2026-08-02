@@ -7,6 +7,7 @@ from agents.sandbox.capabilities import Filesystem, Shell, Skills
 
 from textbook_writer.runtime import build_manager_agent
 from textbook_writer.runtime.agents import (
+    build_chapter_reviewer_agent,
     build_chapter_writer_agent,
     build_curriculum_architect_agent,
     build_html_diagram_agent,
@@ -29,6 +30,7 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     research = build_research_architect_agent(model="gpt-5.6-luna")
     curriculum = build_curriculum_architect_agent(model="gpt-5.6-luna")
     writer = build_chapter_writer_agent(model="gpt-5.6-luna", book_root=book)
+    reviewer = build_chapter_reviewer_agent(model="gpt-5.6-luna")
     visual = build_html_diagram_agent(model="gpt-5.6-luna", book_root=book)
     verifier = build_independent_verifier_agent(model="gpt-5.6-luna")
     comparator = build_solution_comparator_agent(model="gpt-5.6-luna")
@@ -37,6 +39,7 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert _skill_names(research) == {"research"}
     assert _skill_names(curriculum) == set()
     assert _skill_names(writer) == {"textbook-prose"}
+    assert _skill_names(reviewer) == set()
     assert _skill_names(visual) == {"technical-html-diagram"}
     assert _skill_names(verifier) == {"exercise-verification"}
     assert _skill_names(comparator) == {"exercise-verification"}
@@ -52,6 +55,7 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     }
     assert "html-diagram-author" not in manager_tools
     assert "chapter-writer" in manager_tools
+    assert "chapter-reviewer" in manager_tools
 
     prose = (
         Path(__file__).resolve().parents[1]
@@ -87,6 +91,18 @@ def test_agent_prompts_load_from_markdown(tmp_path: Path) -> None:
     assert writer.instructions.endswith("\n")
     assert "research.json" in writer.instructions
     assert "$textbook-prose" in writer.instructions
+
+
+def test_every_agent_prompt_starts_with_persona_and_purpose() -> None:
+    agents_dir = (
+        Path(__file__).resolve().parents[1] / "src/textbook_writer/runtime/agents"
+    )
+    prompt_paths = sorted(agents_dir.glob("*/prompt.md"))
+    assert prompt_paths
+    for path in prompt_paths:
+        first_paragraph = path.read_text(encoding="utf-8").split("\n\n", maxsplit=1)[0]
+        assert first_paragraph.startswith("You are"), path
+        assert "purpose" in first_paragraph.lower(), path
 
 
 def _skill_names(agent: SandboxAgent) -> set[str]:

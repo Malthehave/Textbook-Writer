@@ -1,6 +1,8 @@
 """Plain pydantic models for the textbook pipeline."""
 
 from textbook_writer.models.product import (
+    ChapterReview,
+    EditorialState,
     ExerciseVerification,
     ProductBook,
     ProductBookPlan,
@@ -9,6 +11,8 @@ from textbook_writer.models.product import (
 )
 
 __all__ = [
+    "ChapterReview",
+    "EditorialState",
     "ExerciseVerification",
     "ProductBook",
     "ProductBookPlan",

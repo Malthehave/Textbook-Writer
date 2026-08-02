@@ -70,6 +70,7 @@ def sandbox_tool_run_config(*, root: str | Path) -> RunConfig:
 
 
 from textbook_writer.runtime.agents.chapter_writer.agent import build_chapter_writer_agent
+from textbook_writer.runtime.agents.chapter_reviewer.agent import build_chapter_reviewer_agent
 from textbook_writer.runtime.agents.curriculum_architect.agent import (
     build_curriculum_architect_agent,
 )
@@ -87,6 +88,7 @@ __all__ = [
     "BOOKS_ROOT",
     "agent_capabilities",
     "build_chapter_writer_agent",
+    "build_chapter_reviewer_agent",
     "build_curriculum_architect_agent",
     "build_html_diagram_agent",
     "build_independent_verifier_agent",

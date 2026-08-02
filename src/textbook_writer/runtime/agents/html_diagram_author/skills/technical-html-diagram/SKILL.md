@@ -11,7 +11,9 @@ description: >-
 
 You author **self-contained HTML diagrams** for textbooks. The figure teaches one hard idea—not a full system dump and not page decoration.
 
-There is no catalogue of typed diagram kinds. Choose the simplest visual form that fits the learning purpose (flow, layered architecture, sequence of hops, spatial math intuition, etc.).
+There is no catalogue of typed diagram kinds. Choose the visual encoding that fits the
+learning purpose: curve/axes, timeline, tensor map, state transition, containment,
+before/after comparison, annotated mechanism, or a genuinely relational flow.
 
 Keep the figure sparse enough to read at print size: plan entities → place sparsely → label briefly → validate fit.
 
@@ -35,25 +37,47 @@ Return one complete HTML document:
 ### Workflow
 
 1. **One claim** — From the learning purpose, name one claim the figure must make. Drop everything else into prose.
-2. **Few entities** — List only the 3–7 nodes (or tiers) necessary for that claim. Prefer fewer. Optional: one short title (≤8 words) inside `#diagram`. No legend unless a symbol would be ambiguous without it.
-3. **Plan layout** — One clear reading direction (left→right or top→bottom). Prefer CSS flex/grid or nested panels over absolute positioning. Gaps ≥16px. Stay inside the 840px stage; if content will not fit without shrinking text below 12px, remove content.
-4. **Build sparse HTML** — Labels ≤3 words per box when possible; never a sentence inside a node. Optional semantic fills (keep to 1–2 accents): primary `#dae8fc`/`#6c8ebf`, success `#d5e8d4`/`#82b366`, warning `#fff2cc`/`#d6b656`, neutral `#f5f5f5`/`#666666`. No gradients, shadows, emoji, icon packs, or fake chrome.
-5. **Connect only when the connection is the lesson** — Arrows are optional. Hierarchy, containment, and sequence can be layout alone. Do not wire every box. When drawing an edge: one clean path, optional short label, no crossings if a simpler layout exists.
-6. **Rasterize + look** — call `rasterize-html-diagram` with `figure_id` + the full HTML.
-   The tool returns the PNG image. **Inspect it** for clipping, crowding, collisions,
-   tiny text, and broken math. If anything fails the checklist, fix the HTML and
-   re-rasterize (cap: two fix passes after the first render).
-7. **Attach** — use the returned `png=` path as `asset_path` and `sha256:<digest>` as
+2. **Choose an encoding** — The figure must teach through at least one of position,
+   direction, scale, axes, sequence, containment, or state change. A row/grid of rounded
+   text cards is not a diagram. For example: plot the PPO clipping plateau on axes; show
+   queue depth over time beside actor/learner rates; map tensor regions to devices; place
+   recovery events on a timeline with the durable-state boundary.
+3. **Few entities** — Keep only the labels and marks needed for that claim. Optional: one
+   short title (≤8 words) inside `#diagram`. No legend unless a visual symbol needs it.
+4. **Plan layout** — One clear reading direction. Use inline SVG when geometry, curves,
+   axes, or precise arrows carry meaning; use CSS grid/flex for containment and labeled
+   regions. Keep DOM overlays for LaTeX rather than putting LaTeX in SVG `<text>`.
+   Gaps ≥16px. Stay inside the 840px stage; remove content rather than shrinking below 12px.
+5. **Build sparse HTML** — Labels should be fragments, not prose. Use at most 1–2 semantic
+   accents and high-contrast neutral structure. No gradients, shadows, emoji, icon packs,
+   fake chrome, or repeated card components as the primary visual language.
+6. **Connect only when the connection is the lesson** — Use direction, placement, and
+   boundaries deliberately. Edge labels should explain what crosses a boundary; avoid
+   decorative arrows and crossings.
+7. **Rasterize + visually inspect** — call `rasterize-html-diagram` with `figure_id` +
+   the full HTML. It returns the actual high-resolution PNG that will become the figure.
+   Treat those rendered pixels as the source of truth: do not infer success from the HTML.
+   Scan the image from top to bottom and inspect every title, label, box, line, arrowhead,
+   axis, legend, annotation, and equation. Look specifically for text touching or crossing
+   another object, labels clipped or wrapped awkwardly, obscured arrowheads, crowded gaps,
+   tiny type, broken math, and ambiguous reading order. Fix every visible defect and
+   re-rasterize. Do not attach a figure until you have inspected a clean final render.
+8. **Attach** — use the returned `png=` path as `asset_path` and `sha256:<digest>` as
    `content_sha256`, then write the chapter JSON.
 
 ### Validation checklist (HTML plan + returned PNG)
 
 - [ ] One claim only; ≤7 labeled boxes
+- [ ] Visual meaning comes from position/direction/scale/axes/sequence/containment/state
+- [ ] Not a generic row or grid of rounded text cards
 - [ ] Every label fully visible—no clipping, ellipsis, or overflow outside its box
+- [ ] No text overlaps, touches, or is crossed by another label, line, arrow, or boundary
+- [ ] No objects unintentionally overlap or obscure each other
 - [ ] No text smaller than 12px used to “make it fit”
 - [ ] No `overflow: hidden` on the stage or label containers
 - [ ] Gaps remain readable; boxes do not collide
 - [ ] Math (if any) renders cleanly in the PNG
+- [ ] The final returned PNG—not merely the HTML—was visually inspected after the last edit
 - [ ] Self-critique names what you omitted on purpose and any remaining crowding risk
 
 ## Anti-patterns

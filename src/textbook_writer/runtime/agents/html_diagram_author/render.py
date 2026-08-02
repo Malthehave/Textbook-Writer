@@ -72,7 +72,9 @@ async def _render_html_to_png(html: str, png_path: Path) -> str:
         await _typeset_latex(page)
         root = page.locator("#diagram")
         if await root.count() == 0:
-            root = page.locator("body")
+            raise ValueError("diagram HTML must contain exactly one #diagram element")
+        if await root.count() != 1:
+            raise ValueError("diagram HTML must contain exactly one #diagram element")
         await root.screenshot(path=str(png_path), type="png")
         await browser.close()
     return sha256(png_path.read_bytes()).hexdigest()

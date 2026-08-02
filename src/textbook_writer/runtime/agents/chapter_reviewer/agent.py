@@ -1,4 +1,4 @@
-"""Curriculum architect specialist."""
+"""Independent cross-chapter editorial reviewer."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from textbook_writer.runtime.agents import agent_capabilities
 PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
-def build_curriculum_architect_agent(*, model: str) -> SandboxAgent[Any]:
+def build_chapter_reviewer_agent(*, model: str) -> SandboxAgent[Any]:
     return SandboxAgent(
-        name="Textbook curriculum architect",
+        name="Cross-chapter textbook reviewer",
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="medium"),
+            reasoning=Reasoning(effort="high"),
             verbosity="low",
         ),
         capabilities=agent_capabilities(__file__),

@@ -12,9 +12,9 @@
   numbering: "1",
   number-align: center,
 )
-#set text(font: "Libertinus Serif", size: 10.5pt, fill: ink)
+#set text(font: "Libertinus Serif", size: 10.75pt, fill: ink)
 // Spacing must clearly exceed leading, or paragraph breaks read as soft wraps.
-#set par(justify: true, leading: 0.74em, spacing: 1.35em)
+#set par(justify: true, leading: 0.82em, spacing: 1.4em)
 #set heading(numbering: "1.1")
 #set outline(indent: 1.2em)
 // Display math: textbook style — centered block with equation numbers. Inline
@@ -30,10 +30,10 @@
   #v(4pt)
   #line(length: 100%, stroke: 1.2pt + accent)
 ]
-#show heading.where(level: 2): it => block(above: 1.4em, below: 0.7em)[
+#show heading.where(level: 2): it => block(above: 1.65em, below: 0.85em)[
   #text(font: "Avenir Next", size: 15pt, weight: "semibold", fill: ink)[#it.body]
 ]
-#show heading.where(level: 3): it => block(above: 1em, below: 0.5em)[
+#show heading.where(level: 3): it => block(above: 1.2em, below: 0.6em)[
   #text(font: "Avenir Next", size: 12pt, weight: "semibold", fill: ink)[#it.body]
 ]
 
@@ -151,7 +151,8 @@
 ]
 
 #let exercise-box(number, prompt, solution-label) = block(
-  width: 100%, stroke: 0.8pt + border, radius: 4pt, inset: 11pt, above: 6pt, below: 9pt,
+  width: 100%, breakable: false, stroke: 0.8pt + border, radius: 4pt,
+  inset: 11pt, above: 6pt, below: 9pt,
 )[
   #text(font: "Avenir Next", weight: "semibold", fill: accent)[Exercise #number]
   #v(4pt)
@@ -161,7 +162,7 @@
 ]
 
 #let solution-box(number, answer, reasoning, exercise-label) = block(
-  width: 100%, fill: rgb("#F7FAF9"), stroke: 0.7pt + border, radius: 4pt,
+  width: 100%, breakable: false, fill: rgb("#F7FAF9"), stroke: 0.7pt + border, radius: 4pt,
   inset: 11pt, above: 6pt, below: 10pt,
 )[
   #text(font: "Avenir Next", weight: "semibold", fill: accent)[Answer #number]

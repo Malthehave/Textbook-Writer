@@ -26,7 +26,7 @@ def build_chapter_writer_agent(*, model: str, book_root: str | Path) -> SandboxA
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="low"),
+            reasoning=Reasoning(effort="medium"),
             verbosity="low",
         ),
         tools=[
@@ -34,7 +34,9 @@ def build_chapter_writer_agent(*, model: str, book_root: str | Path) -> SandboxA
                 tool_name="html-diagram-author",
                 tool_description=(
                     "Author one HTML diagram for this chapter and merge it into the chapter "
-                    "JSON on disk. Call after the chapter draft exists. Returns a short status."
+                    "JSON on disk. In input pass chapter id, planned visual id, learning "
+                    "purpose, caption, and target section. Call after the chapter draft exists. "
+                    "Returns a short status."
                 ),
                 max_turns=32,
                 run_config=run_config,

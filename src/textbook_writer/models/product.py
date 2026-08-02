@@ -61,7 +61,7 @@ class Research(Model):
 
 class PlannedVisual(Model):
     visual_id: str
-    diagram_type: str = Field(pattern=r"^(architecture|process-flow)$")
+    diagram_type: str = Field(min_length=1)
     learning_purpose: str = Field(min_length=1)
     caption: str = Field(min_length=1)
 
@@ -82,7 +82,7 @@ class PlannedChapter(Model):
     learning_outcomes: list[str] = Field(min_length=1)
     target_words: int = Field(ge=250)
     exercise_count: int = Field(ge=1, le=20)
-    assessment_brief: str | None = Field(default=None, min_length=40)
+    assessment_brief: str = Field(min_length=40)
     visual: PlannedVisual | None = None
 
 
@@ -101,6 +101,11 @@ class ProductBookPlan(Model):
         chapter_ids = {item.chapter_id for item in self.chapters}
         if len(chapter_ids) != len(self.chapters):
             raise ValueError("book plan chapter IDs must be unique")
+        for chapter in self.chapters:
+            if chapter.exercise_count < len(chapter.learning_outcomes):
+                raise ValueError(
+                    f"{chapter.chapter_id} needs at least one exercise per learning outcome"
+                )
         return self
 
 
@@ -172,6 +177,36 @@ class ProductChapter(Model):
         return self
 
 
+class EditorialReviewNote(Model):
+    category: str = Field(
+        pattern=r"^(continuity|scope|terminology|progression|pedagogy|summary|visual|exercise)$"
+    )
+    evidence: str = Field(min_length=1)
+    requested_change: str = Field(min_length=1)
+
+
+class ChapterReview(Model):
+    chapter_ref: str
+    decision: str = Field(pattern=r"^(approve|revise)$")
+    summary: str = Field(min_length=1)
+    notes: list[EditorialReviewNote] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_decision_notes(self) -> "ChapterReview":
+        if self.decision == "revise" and not self.notes:
+            raise ValueError("a revise decision requires concrete review notes")
+        return self
+
+
+class EditorialState(Model):
+    accepted_chapter_refs: list[str] = Field(default_factory=list)
+    established_concepts: list[str] = Field(default_factory=list)
+    terminology: dict[str, str] = Field(default_factory=dict)
+    running_system_state: list[str] = Field(default_factory=list)
+    reusable_examples: list[str] = Field(default_factory=list)
+    open_threads: list[str] = Field(default_factory=list)
+
+
 class ExerciseVerdict(Model):
     exercise_ref: str
     result: str = Field(pattern=r"^(equivalent|compatible|different)$")
@@ -215,4 +250,41 @@ class ProductBook(Model):
         }
         if verification_chapters != chapter_ids:
             raise ValueError("exercise verifications must cover every chapter exactly once")
+        plan_by_id = {item.chapter_id: item for item in self.plan.chapters}
+        verification_by_id = {
+            item.chapter_ref: item for item in self.exercise_verifications
+        }
+        for chapter in self.chapters:
+            chapter_plan = plan_by_id[chapter.chapter_id]
+            if len(chapter.exercises) != chapter_plan.exercise_count:
+                raise ValueError(
+                    f"{chapter.chapter_id} exercise count does not match the plan"
+                )
+            assessed_outcomes = {
+                exercise.learning_outcome for exercise in chapter.exercises
+            }
+            missing_outcomes = set(chapter_plan.learning_outcomes) - assessed_outcomes
+            if missing_outcomes:
+                raise ValueError(
+                    f"{chapter.chapter_id} has unassessed learning outcomes: "
+                    + ", ".join(sorted(missing_outcomes))
+                )
+            if chapter_plan.visual is not None:
+                figure_ids = {figure.figure_id for figure in chapter.figures}
+                if chapter_plan.visual.visual_id not in figure_ids:
+                    raise ValueError(
+                        f"{chapter.chapter_id} is missing planned visual "
+                        f"{chapter_plan.visual.visual_id}"
+                    )
+            verification = verification_by_id[chapter.chapter_id]
+            exercise_ids = {exercise.exercise_id for exercise in chapter.exercises}
+            verdict_refs = {verdict.exercise_ref for verdict in verification.verdicts}
+            if verdict_refs != exercise_ids:
+                raise ValueError(
+                    f"{chapter.chapter_id} verification must cover every exercise exactly once"
+                )
+            if any(verdict.decision != "approve" for verdict in verification.verdicts):
+                raise ValueError(
+                    f"{chapter.chapter_id} contains exercises that are not approved"
+                )
         return self

@@ -28,6 +28,7 @@ not grade their own exercises).
 | research-architect | `production/research.json` |
 | curriculum-architect | `production/book-plan.json` |
 | chapter-writer | `production/chapters/<id>.json` (+ figures via nested diagrammer) |
+| chapter-reviewer | `production/chapters/<id>.review.json` |
 | independent-verifier | `production/chapters/<id>.answers.json` |
 | solution-comparator | `production/chapters/<id>.verification.json` |
 
@@ -37,7 +38,9 @@ not grade their own exercises).
 |---|---|
 | `production/research.json` | Research (sources + topics) |
 | `production/book-plan.json` | Curriculum plan |
+| `production/editorial-state.json` | Manager-owned cross-chapter memory |
 | `production/chapters/<id>.json` | Chapter + exercises |
+| `production/chapters/<id>.review.json` | Cross-chapter editorial review |
 | `production/chapters/<id>.answers.json` | Blind solve |
 | `production/chapters/<id>.verification.json` | Grade |
 | `production/book.json` | Assembled book |
@@ -51,9 +54,11 @@ Before re-running a stage, `ls production/`. Resume from disk when a good artifa
 Chat only. Clarify audience, depth, scope, and length with the learner. Collect HTTPS
 URLs. Do not start research until they confirm the scope in chat.
 
-Rough page guidance for later planning: ~5/8/12 pages per chapter for
-compact/intermediate/deep, plus ~20% overhead (min 4). Put `target_pages` on the
-book plan when curriculum runs.
+Pass the agreed audience, depth, scope, and target pages in the curriculum tool input.
+Page count constrains scope, never typography. Reserve 25–35% for figures, exercises,
+answers, front matter, and bibliography; budget remaining prose at roughly 350–500 words
+per page. Typical exercise density is 2–3 per compact chapter, 3–5 intermediate, and 5–8
+deep, with focused, applied, and synthesis practice rather than one omnibus prompt.
 
 ### B — Research
 `research-architect` → `research.json` (web search; follow `$research`).
@@ -61,15 +66,43 @@ The architect owns finding real sources.
 
 ### C — Curriculum
 `curriculum-architect` → `book-plan.json` (include `target_pages` from the agreed
-scope). If the plan is weak, edit the JSON or re-run the architect with a short fix
-brief—no separate auditor/repair agents.
+scope). Inspect chapter order, total target words, exercise counts/assessment briefs, and
+visual purposes before accepting it. If the plan is weak, edit the JSON or re-run the
+architect with a short fix brief—no separate auditor/repair agents.
+
+Create `production/editorial-state.json` after accepting the plan:
+
+```json
+{
+  "accepted_chapter_refs": [],
+  "established_concepts": [],
+  "terminology": {},
+  "running_system_state": [],
+  "reusable_examples": [],
+  "open_threads": []
+}
+```
 
 ### D — Per chapter (plan order)
 1. `chapter-writer` → chapter JSON **and** its figures (author calls the diagrammer)
-2. `independent-verifier` — answer-free exercises only (blind QA; you commission this)
-3. `solution-comparator` → `production/chapters/<id>.verification.json`
-4. **Exercise QA gate (mandatory — never skip)** — open the verification file with Shell/file
+2. `chapter-reviewer` → `production/chapters/<id>.review.json`
+3. **Editorial gate (mandatory — never skip)** — open the review file yourself.
+4. `independent-verifier` — answer-free exercises only (blind QA; you commission this)
+5. `solution-comparator` → `production/chapters/<id>.verification.json`
+6. **Exercise QA gate (mandatory — never skip)** — open the verification file with Shell/file
    editor and inspect every `verdicts[].decision`:
+
+#### Editorial gate
+
+The reviewer is evidence, not the decision-maker. Inspect `decision`, `summary`, and every
+note. Confirm the draft fits the full plan and accepted book, not only its own chapter brief.
+
+If the decision is `revise`, do **not** run exercise QA. Call `chapter-writer` with the
+chapter id and every note's `category`, full `evidence`, and full `requested_change`. Re-run
+`chapter-reviewer` and reopen the file. Allow at most two editorial rewrite cycles after the
+initial draft. If it still does not approve, stop and report the unresolved notes.
+
+If the decision is `approve`, proceed to blind exercise QA.
 
 #### If any verdict is `reject` or `revise`
 Do **not** advance to the next chapter or to publish.
@@ -87,8 +120,15 @@ up to two fix passes). If still not all-`approve`, stop and tell the learner whi
 failed and why (quote `notes`) — do not publish that chapter’s broken exercises.
 
 #### If every verdict is `approve`
-Chapter is QA-clear. Continue to the next chapter (or publish when all planned chapters are
-clear).
+Chapter is QA-clear. Update `production/editorial-state.json` before continuing:
+
+- append the chapter id to `accepted_chapter_refs`
+- add concepts and canonical terms the reader can now rely on
+- record how the shared running system changed
+- record examples later chapters may reuse without re-explaining
+- keep only still-open promises in `open_threads`
+
+Then continue to the next chapter (or publish when all planned chapters are clear).
 
 Never treat a comparator tool status line as proof of approval — only the verification JSON
 on disk counts.

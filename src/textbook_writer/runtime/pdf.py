@@ -18,6 +18,9 @@ from textbook_writer.models.product import ProductBook, ProductChapter, ProductF
 CLAIM_MARKER_RE = re.compile(r"\s*\[@[a-z0-9]+(?:-[a-z0-9]+)*\]")
 CONCEPT_LINK_RE = re.compile(r"\[([^\]]+)\]\(concept:[^)]+\)")
 BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+DISPLAY_MATH_RE = re.compile(r"\$\$(.+?)\$\$|\\\[(.+?)\\\]", flags=re.DOTALL)
+INLINE_PAREN_MATH_RE = re.compile(r"\\\((.+?)\\\)")
+MITEX_IMPORT = '#import "@preview/mitex:0.2.6": *'
 
 
 def book_output_stem(title: str, *, max_length: int = 80) -> str:
@@ -39,6 +42,18 @@ def markdown_to_typst_content(markdown: str) -> tuple[str, tuple[str, ...]]:
     prepared = prepare_product_markdown(markdown)
     if not prepared:
         return "[]", ()
+    display_math: list[str] = []
+
+    def replace_display(match: re.Match[str]) -> str:
+        latex = (match.group(1) or match.group(2)).strip()
+        if "```" in latex:
+            raise ValueError("display math cannot contain a fenced-code delimiter")
+        index = len(display_math)
+        display_math.append(latex)
+        return f"\n\nTEXTBOOKDISPLAYMATH{index}TOKEN\n\n"
+
+    prepared = DISPLAY_MATH_RE.sub(replace_display, prepared)
+    prepared = INLINE_PAREN_MATH_RE.sub(lambda match: f"${match.group(1)}$", prepared)
     converted = convert(prepared, parser="markdown-it")
     imports: list[str] = []
     body_lines: list[str] = []
@@ -48,6 +63,11 @@ def markdown_to_typst_content(markdown: str) -> tuple[str, tuple[str, ...]]:
         else:
             body_lines.append(line)
     body = "\n".join(body_lines).strip()
+    for index, latex in enumerate(display_math):
+        token = f"TEXTBOOKDISPLAYMATH{index}TOKEN"
+        body = body.replace(token, f"#mitex(```latex\n{latex}\n```)")
+    if display_math and MITEX_IMPORT not in imports:
+        imports.append(MITEX_IMPORT)
     if not body:
         return "[]", tuple(dict.fromkeys(imports))
     return f"[\n{body}\n]", tuple(dict.fromkeys(imports))
@@ -122,9 +142,6 @@ def render_product_book(book: ProductBook) -> str:
     template = files("textbook_writer.runtime").joinpath("textbook.typ").read_text(
         encoding="utf-8"
     )
-    compact_book = len(book.chapters) >= 3
-    if compact_book:
-        template = _dense_compact_template(template)
     source_by_id = {item.source_id: item for item in book.research.sources}
     markdown = ProductMarkdownRenderer()
     body = [
@@ -135,8 +152,7 @@ def render_product_book(book: ProductBook) -> str:
         "#counter(page).update(1)",
         "#outline(title: [Contents], depth: 2)",
     ]
-    if not compact_book:
-        body.append("#pagebreak()")
+    body.append("#pagebreak()")
     body.extend(
         [
             "#heading(level: 1)[How to use this book] <how-to-use>",
@@ -172,8 +188,7 @@ def render_product_book(book: ProductBook) -> str:
         body.append("")
     exercise_numbers: dict[str, str] = {}
     for chapter_number, chapter in enumerate(book.chapters, start=1):
-        if not compact_book or chapter_number == 1:
-            body.append("#pagebreak()")
+        body.append("#pagebreak()")
         body.append(
             f"#heading(level: 1)[Chapter {chapter_number}: {_escape(chapter.title)}] "
             f"<{chapter.chapter_id}>"
@@ -234,8 +249,7 @@ def render_product_book(book: ProductBook) -> str:
                 ]
             )
 
-    if not compact_book:
-        body.append("#pagebreak()")
+    body.append("#pagebreak()")
     body.extend(["#heading(level: 1)[Answer key] <answer-key>", ""])
     for chapter in book.chapters:
         for exercise in chapter.exercises:
@@ -250,8 +264,7 @@ def render_product_book(book: ProductBook) -> str:
                 ]
             )
 
-    if not compact_book:
-        body.append("#pagebreak()")
+    body.append("#pagebreak()")
     body.extend(
         [
             "#heading(level: 1)[Bibliography] <bibliography>",
@@ -275,34 +288,6 @@ def render_product_book(book: ProductBook) -> str:
         output.append("")
     output.extend(body)
     return "\n".join(output).rstrip() + "\n"
-
-
-def _dense_compact_template(template: str) -> str:
-    replacements = {
-        "margin: (top: 21mm, bottom: 20mm, left: 23mm, right: 23mm)": (
-            "margin: (top: 17mm, bottom: 16mm, left: 20mm, right: 20mm)"
-        ),
-        "size: 10.5pt, fill: ink": "size: 9.6pt, fill: ink",
-        "leading: 0.74em, spacing: 1.35em": "leading: 0.66em, spacing: 0.95em",
-        "above: 1.8em, below: 1.1em": "above: 1.35em, below: 0.8em",
-        "size: 23pt, weight:": "size: 20pt, weight:",
-        "above: 1.4em, below: 0.7em": "above: 1.05em, below: 0.5em",
-        "size: 15pt, weight:": "size: 13.5pt, weight:",
-        "inset: 13pt,": "inset: 10pt,",
-        "below: 12pt,": "below: 8pt,",
-        "#v(6pt)\n  #for item": "#v(4pt)\n  #for item",
-        "#v(3pt)\n  ]": "#v(2pt)\n  ]",
-        "inset: 11pt,\n  above: 8pt,\n  below: 10pt,": (
-            "inset: 9pt,\n  above: 6pt,\n  below: 7pt,"
-        ),
-        "radius: 4pt, inset: 11pt, above: 6pt, below: 9pt": (
-            "radius: 4pt, inset: 9pt, above: 5pt, below: 7pt"
-        ),
-        "inset: 11pt, above: 6pt, below: 10pt": "inset: 9pt, above: 5pt, below: 7pt",
-    }
-    for old, new in replacements.items():
-        template = template.replace(old, new)
-    return template
 
 
 def _source_line(source_refs: list[str], source_by_id: dict[str, object]) -> str:

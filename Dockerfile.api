@@ -34,6 +34,7 @@ COPY src ./src
 COPY AGENTS.md ./
 
 RUN uv sync --frozen --no-dev
+RUN uv run playwright install --with-deps chromium
 
 ENV TEXTBOOK_API_ROOT=/app
 ENV TEXTBOOK_SESSIONS_DB=/app/output/ui-sessions.sqlite

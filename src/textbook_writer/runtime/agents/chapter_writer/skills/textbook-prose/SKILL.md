@@ -29,8 +29,9 @@ buzzwords.
    of understanding → consequence or limitation. Do not make every section the same
    "definition then bullet list" template.
 3. **Name the figure** where the mechanism unlocks (mention the planned figure id).
-4. **Close the loop** in the summary: what they can now do, and what still depends on
-   later chapters.
+4. **Close the loop** in a newly synthesized summary: what they can now do, how it extends
+   prior learning, and what still depends on later chapters. Do not copy the final section,
+   begin mid-sentence, or carry partial code into the summary.
 5. **Bridge** (chapters after the first): 2–4 sentences naming what they already have
    and what this chapter adds.
 
@@ -42,8 +43,13 @@ buzzwords.
 - Open each paragraph with its point; keep the paragraph on that point.
 - Define a term on first use, then reuse the same term—no synonym roulette.
 - Avoid ambiguous pronouns ("this", "it", "they") when the referent is unclear.
-- When a learning outcome needs math, put the formula in markdown math and define every
-  symbol before exercises use it.
+- When a learning outcome needs math, use `$...$` for inline LaTeX and `$$...$$` on its
+  own paragraph for display LaTeX, then define every symbol before exercises use it.
+  Example: `The ratio is $r_t(\\theta)$.` followed by
+  `$$L(\\theta)=\\mathbb{E}_t[r_t(\\theta)A_t].$$`
+- Never emit bare notation such as `s_t`, `\\frac{a}{b}`, `\\(...\\)`, or `\\[...\\]` in
+  learner prose. Code identifiers belong in backticks; mathematical identifiers belong
+  inside `$` delimiters.
 
 ## Substance over scaffolding
 
@@ -68,14 +74,17 @@ if any check fails; do not rely on assemble to catch you.
 - Every `source_refs` on sections/exercises exists in the research JSON.
 - After the diagrammer runs: at least one figure; section prose names the figure id
   (or clearly refers to “the figure”); `figure.section_ref` points at a real section.
-- If outcomes need math (equations, gradients, loss, derivatives, …), put formula
-  markdown in the body and define every symbol before exercises use it.
+- If outcomes need math (equations, gradients, loss, derivatives, …), use the required
+  `$...$` / `$$...$$` delimiters in the body and define every symbol before exercises use it.
 
 ## Exercises
 
-- Map every learning outcome to at least one teaching section and one exercise.
-- Each exercise `learning_outcome` must be one of the chapter outcomes (or clearly
-  match the plan’s assessment brief).
+- Map every learning outcome to at least one teaching section and one exercise. Do not
+  combine all outcomes into one oversized omnibus prompt.
+- Each exercise `learning_outcome` must exactly equal one of the planned chapter outcomes.
+- Use the planned count to create progression: a focused concept/derivation check, an
+  applied coding or debugging task where appropriate, and a transfer/synthesis or system
+  design task. Intermediate/deep chapters must include non-recall practice.
 - Prompts must be self-contained: premises, required fields, and grading criteria stated
   in the prompt when multiple designs would otherwise be defensible.
 - Answers and reasoning must be defensible from the research sources—not invented.

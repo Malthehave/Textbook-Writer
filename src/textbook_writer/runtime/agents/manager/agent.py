@@ -9,6 +9,7 @@ from agents import ModelSettings
 from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
 
+from textbook_writer.runtime.agents.chapter_reviewer.agent import build_chapter_reviewer_agent
 from textbook_writer.runtime.agents.chapter_writer.agent import build_chapter_writer_agent
 from textbook_writer.runtime.agents.curriculum_architect.agent import (
     build_curriculum_architect_agent,
@@ -61,8 +62,9 @@ def build_manager_agent(
             build_curriculum_architect_agent(model=model).as_tool(
                 tool_name="curriculum-architect",
                 tool_description=(
-                    "Read production/research.json; write production/book-plan.json. "
-                    "Returns a short status only."
+                    "Read production/research.json and write a page-budgeted "
+                    "production/book-plan.json. In input, pass the agreed audience, depth, "
+                    "scope, target pages, and exercise expectations. Returns a short status only."
                 ),
                 max_turns=32,
                 run_config=run_config,
@@ -76,6 +78,19 @@ def build_manager_agent(
                     "verification.json into the tool input. Returns a short status only."
                 ),
                 max_turns=64,
+                run_config=run_config,
+            ),
+            build_chapter_reviewer_agent(model=model).as_tool(
+                tool_name="chapter-reviewer",
+                tool_description=(
+                    "Independently review one chapter against the full plan, editorial "
+                    "state, and prior accepted chapters; write "
+                    "production/chapters/<chapter_id>.review.json. Pass the chapter id and "
+                    "whether this is an initial review or rewrite in input. After this tool, "
+                    "you MUST open the review JSON and apply the editorial gate. "
+                    "Returns a short status only."
+                ),
+                max_turns=48,
                 run_config=run_config,
             ),
             build_independent_verifier_agent(model=model).as_tool(
