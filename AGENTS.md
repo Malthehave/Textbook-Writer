@@ -52,10 +52,11 @@ Prefer `docker compose logs api` for live runs.
 1. Chat → agree audience, depth, scope, length with the learner
 2. `research-architect` → `production/research.json` (web search; real HTTPS sources)
 3. `curriculum-architect` → book plan (`target_pages` from agreed scope)
-4. Per chapter, use a bounded wavefront: chapter-writer → reviewer + blind verifier in
-   parallel → manager editorial gate. Editorial approval freezes prose/figures and advances
-   `production/editorial-state.json`; then the solution comparator for that chapter runs in
-   parallel with the next chapter writer. Exercise QA may change only exercises/answers.
+4. Per chapter, use a bounded wavefront: chapter-writer → reviewer → manager editorial gate
+   → blind verifier. Do not solve exercises for editorially rejected prose. Editorial
+   approval freezes prose/figures and advances `production/editorial-state.json`; then the
+   solution comparator for that chapter runs in parallel with the next chapter writer.
+   Exercise QA may change only exercises/answers.
    Never run two chapter writers concurrently. Tool concurrency is capped at two.
 5. `build-textbook-pdf` → assemble `book.json` + Typst PDF and write
    `production/publication-report.json`. Accept the requested page target within an
@@ -69,6 +70,9 @@ chapter-reviewer, independent-verifier, solution-comparator, and
 immediately after its producer returns, so PDF publication only assembles and compiles
 already-valid state. The chapter-writer owns html-diagram-author as a nested tool (author +
 illustrator); each figure uses one stable HTML path and one stable PNG path.
+`production/chapters/<id>.answers.json` validates against `BlindAnswers`, not
+`ProductChapter`. Plans targeting 6 pages or fewer are capped at 1 chapter, 3 exercises,
+and 1 visual; 7–8 page plans are capped at 2 chapters, 6 exercises, and 2 visuals.
 Web discovery uses hosted `WebSearchTool` on the research architect only.
 
 Specialists are `Agent.as_tool()` calls: each invocation is a **fresh nested run** with the

@@ -53,6 +53,8 @@ def _tool_arguments(raw: Any) -> Any:
     if args is None:
         args = raw.get("action") if isinstance(raw, dict) else getattr(raw, "action", None)
     if args is None:
+        args = raw.get("input") if isinstance(raw, dict) else getattr(raw, "input", None)
+    if args is None:
         return {}
     if hasattr(args, "model_dump"):
         return args.model_dump(mode="json")
@@ -60,7 +62,7 @@ def _tool_arguments(raw: Any) -> Any:
         try:
             return json.loads(args)
         except json.JSONDecodeError:
-            return {"raw": args}
+            return args
     return args
 
 

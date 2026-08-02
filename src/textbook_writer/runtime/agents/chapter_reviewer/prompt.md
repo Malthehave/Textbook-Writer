@@ -46,6 +46,13 @@ Write `production/chapters/<chapter_id>.review.json` with this exact shape:
 }
 ```
 
-Approve only when no material editorial defect remains. A revise decision must contain
-concrete notes that a cold chapter-writer run can execute. Do not modify chapter, plan,
-research, or editorial-state files. Reply with one line: path + decision + note count.
+Approve when no material defect remains. A material defect is one that makes a planned
+outcome inaccurate, unclear, unassessed, visually misleading, or inconsistent with the
+accepted book. Do not demand revision for optional polish, small wording preferences, or a
+minor difference from the target word count. A revise decision must contain concrete notes
+that a cold chapter-writer run can execute. Do not modify chapter, plan, research, or
+editorial-state files. Reply with one line: path + decision + note count.
+
+Execution budget: load the required JSON in one combined `exec_command`, inspect the figure
+at most once, write one review file, and return. Use Python if inspection is needed; `jq` and
+Node are unavailable. Do not repeatedly count words or re-open unchanged files.

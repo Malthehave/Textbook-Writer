@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+from urllib.parse import urlsplit
 
 from pydantic import Field, model_validator
 
@@ -56,6 +57,28 @@ class Research(Model):
         topic_ids = {item.topic_id for item in self.topics}
         if len(topic_ids) != len(self.topics):
             raise ValueError("research topic IDs must be unique")
+        sources_by_id = {item.source_id: item for item in self.sources}
+        for topic in self.topics:
+            refs = set(topic.source_refs)
+            if not refs <= source_ids:
+                raise ValueError(f"{topic.topic_id} references unknown research sources")
+            if len(refs) < 2:
+                raise ValueError(f"{topic.topic_id} needs at least two sources")
+            hosts = {urlsplit(sources_by_id[ref].url).hostname for ref in refs}
+            if len(hosts) < 2:
+                raise ValueError(f"{topic.topic_id} needs sources from two independent hosts")
+            if not any(
+                sources_by_id[ref].authority in {"official", "practitioner"}
+                for ref in refs
+            ):
+                raise ValueError(
+                    f"{topic.topic_id} needs an official or practitioner source"
+                )
+            for claim in topic.claims:
+                if not set(claim.source_refs) <= refs:
+                    raise ValueError(
+                        f"{claim.claim_id} source refs must belong to {topic.topic_id}"
+                    )
         return self
 
 
@@ -106,6 +129,20 @@ class ProductBookPlan(Model):
                 raise ValueError(
                     f"{chapter.chapter_id} needs at least one exercise per learning outcome"
                 )
+        if self.target_pages <= 6:
+            if len(self.chapters) > 1:
+                raise ValueError("books of 6 pages or fewer may have at most 1 chapter")
+            if sum(chapter.exercise_count for chapter in self.chapters) > 3:
+                raise ValueError("books of 6 pages or fewer may have at most 3 exercises")
+            if sum(chapter.visual is not None for chapter in self.chapters) > 1:
+                raise ValueError("books of 6 pages or fewer may have at most 1 visual")
+        elif self.target_pages <= 8:
+            if len(self.chapters) > 2:
+                raise ValueError("books of 8 pages or fewer may have at most 2 chapters")
+            if sum(chapter.exercise_count for chapter in self.chapters) > 6:
+                raise ValueError("books of 8 pages or fewer may have at most 6 exercises")
+            if sum(chapter.visual is not None for chapter in self.chapters) > 2:
+                raise ValueError("books of 8 pages or fewer may have at most 2 visuals")
         return self
 
 
@@ -204,6 +241,26 @@ class EditorialState(Model):
     running_system_state: list[str] = Field(default_factory=list)
     reusable_examples: list[str] = Field(default_factory=list)
     open_threads: list[str] = Field(default_factory=list)
+
+
+class BlindAnswer(Model):
+    exercise_ref: str
+    answer: str = Field(min_length=1)
+    reasoning: str = Field(min_length=1)
+    ambiguity: str = Field(pattern=r"^(none|minor|material)$")
+    source_refs: list[str] = Field(default_factory=list)
+
+
+class BlindAnswers(Model):
+    chapter_ref: str
+    answers: list[BlindAnswer] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_answers(self) -> "BlindAnswers":
+        refs = {item.exercise_ref for item in self.answers}
+        if len(refs) != len(self.answers):
+            raise ValueError("blind answer exercise refs must be unique")
+        return self
 
 
 class ExerciseVerdict(Model):

@@ -186,6 +186,31 @@ def test_hosted_nested_tool_gets_a_descriptive_name_and_action() -> None:
     assert event["payload"]["input"] == {"query": "distributed RL"}
 
 
+def test_nested_custom_tool_keeps_raw_patch_input() -> None:
+    patch = "*** Begin Patch\n*** Update File: production/chapter.json\n@@\n-old\n+new\n*** End Patch"
+    event = normalize_subagent_event(
+        {
+            "event": SimpleNamespace(
+                type="run_item_stream_event",
+                name="tool_called",
+                item=SimpleNamespace(
+                    raw_item={
+                        "call_id": "patch-1",
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "input": patch,
+                    }
+                ),
+            ),
+            "agent": AGENT,
+            "tool_call": {"call_id": "outer-1"},
+        }
+    )
+    assert event is not None
+    assert event["payload"]["tool_name"] == "apply_patch"
+    assert event["payload"]["input"] == patch
+
+
 def test_client_disconnect_cancels_incomplete_run() -> None:
     async def main() -> FakeRun:
         # Never completes: generator keeps the run open until cancelled.

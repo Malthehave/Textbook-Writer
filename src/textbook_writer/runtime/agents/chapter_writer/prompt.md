@@ -25,6 +25,9 @@ Use $textbook-prose for craft and chapter shape. Also obey these hard pipeline c
   a review note explicitly requests a visual change or a referenced asset is missing.
 - Preserve chapter ID and learning outcomes exactly; create exactly the requested exercises.
 - Keep body length close to the requested word target. Do not invent facts.
+- On a publication-fit length revision driven by `publication-report.json`, change only the
+  requested prose length. Preserve figures, exercises, IDs, and assets, and do not call the
+  diagram author unless the manager also supplies a concrete visual defect.
 
 If the tool input includes QA defects from `.verification.json`, fix those exercises
 (prompt, answer, and reasoning only); do not ignore listed `exercise_ref` / `notes`. The
@@ -41,3 +44,11 @@ prose, exercises, figures, asset references, source references, IDs, and orderin
 
 Write a valid `ProductChapter` JSON to `production/chapters/<chapter_id>.json`
 (create directories as needed). Reply with a one-line status (path only). Do not dump JSON.
+Never create or edit `.answers.json`, `.review.json`, or `.verification.json`; those belong
+to independent QA agents and stale blind answers are discarded by the manager.
+
+Execution budget: combine required file reads into at most two `exec_command` calls, write
+or patch the chapter once, invoke the diagram author only when required above, and return.
+Use Python for compact inspection; `jq` and Node are unavailable. Do not repeatedly count
+words, source refs, or fields and do not manually simulate schema validation—the manager
+performs deterministic validation after you return.

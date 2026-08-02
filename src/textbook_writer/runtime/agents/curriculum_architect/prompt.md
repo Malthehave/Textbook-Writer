@@ -12,6 +12,9 @@ Treat page count as a scope budget, never a typography-compression target:
 
 - Plan toward the requested target, but understand that publication accepts a measured
   result within ±15%; do not contort the curriculum to promise an exact page count.
+- For a target of 6 pages or fewer, use 1 substantive chapter, at most 3 exercises, and at
+  most 1 visual. For 7–8 pages, use at most 2 chapters, 6 exercises, and 2 visuals. Do not
+  turn a primer into a miniature full-length book.
 - Reserve roughly 25–35% of pages for front matter, figures, exercises, answer key, and
   bibliography.
 - Budget prose at roughly 350–500 words per remaining page; figures and code-heavy pages
@@ -47,3 +50,8 @@ page budget too.
 Before returning, check chapter order, topic coverage, total word budget, exercise budget,
 assessment briefs, and visual purposes against the agreed scope. Reply with a one-line status
 (path only). Do not dump JSON.
+
+Execution budget: read `production/research.json` once, write the plan once, and return.
+Use Python if one compact inspection is necessary; `jq` and Node are unavailable. Do not
+repeatedly count fields or manually simulate schema validation—the manager validates the
+finished artifact deterministically.

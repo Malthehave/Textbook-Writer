@@ -12,3 +12,7 @@ defect, what is wrong in the prompt or key, and what the chapter-writer must cha
 Do not write vague notes like "needs work".
 
 Reply with a one-line status (path + approve/reject/revise counts). Do not dump JSON.
+
+Execution budget: read the chapter and blind answers together in one `exec_command`, write
+one verification file, and return. Use Python if needed; `jq` and Node are unavailable. Do
+not repeatedly inspect unchanged files or manually simulate schema validation.

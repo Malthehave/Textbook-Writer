@@ -65,7 +65,7 @@ def build_manager_agent(
                     "source_refs must be source_ids, never URLs; ≥2 hosts/topic. "
                     "Follow $research. Returns a short status only."
                 ),
-                max_turns=48,
+                max_turns=24,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -77,7 +77,7 @@ def build_manager_agent(
                     "production/book-plan.json. In input, pass the agreed audience, depth, "
                     "scope, target pages, and exercise expectations. Returns a short status only."
                 ),
-                max_turns=32,
+                max_turns=12,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -94,7 +94,7 @@ def build_manager_agent(
                     "On QA rewrite, put every non-approve exercise_ref and notes from "
                     "verification.json into the tool input. Returns a short status only."
                 ),
-                max_turns=64,
+                max_turns=24,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -109,7 +109,7 @@ def build_manager_agent(
                     "you MUST open the review JSON and apply the editorial gate. "
                     "Returns a short status only."
                 ),
-                max_turns=48,
+                max_turns=12,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -122,7 +122,7 @@ def build_manager_agent(
                     "Pass answer-free exercises only. Re-run after every chapter rewrite. "
                     "Returns a short status only."
                 ),
-                max_turns=48,
+                max_turns=12,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -136,7 +136,7 @@ def build_manager_agent(
                     "the exercise QA gate before the next chapter or publish. "
                     "Returns a short status only."
                 ),
-                max_turns=48,
+                max_turns=12,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,

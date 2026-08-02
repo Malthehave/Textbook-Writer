@@ -43,6 +43,8 @@ def _tool_arguments(item: Any) -> Any:
     arguments = _value(item, "arguments")
     if arguments is None:
         arguments = _value(item, "action")
+    if arguments is None:
+        arguments = _value(item, "input")
     if not isinstance(arguments, str):
         if hasattr(arguments, "model_dump"):
             return arguments.model_dump(mode="json")
@@ -50,7 +52,7 @@ def _tool_arguments(item: Any) -> Any:
     try:
         return json.loads(arguments)
     except json.JSONDecodeError:
-        return {"raw": arguments}
+        return arguments
 
 
 def normalize_subagent_event(stream_event: Any) -> dict[str, Any] | None:

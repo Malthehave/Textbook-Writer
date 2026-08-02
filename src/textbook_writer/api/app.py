@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from textbook_writer.api.history import session_items_to_ui_messages
+from textbook_writer.api.progress import derive_book_progress
 from textbook_writer.api.store import (
     SessionRow,
     SessionStore,
@@ -215,6 +216,13 @@ def session_usage(session_id: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/sessions/{session_id}/progress")
+def session_progress(session_id: str) -> dict[str, Any]:
+    if store.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    return derive_book_progress(_book_root(session_id))
+
+
 @app.get("/api/sessions/{session_id}/subagent-events")
 def session_subagent_events(session_id: str) -> list[dict[str, Any]]:
     if store.get(session_id) is None:
@@ -306,7 +314,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
             agent,
             user_text,
             session=session,
-            max_turns=1000,
+            max_turns=200,
             hooks=cost_hooks,
             run_config=sandbox_tool_run_config(root=book_root),
         )

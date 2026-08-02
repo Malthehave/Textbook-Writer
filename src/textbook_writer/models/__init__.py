@@ -1,6 +1,7 @@
 """Plain pydantic models for the textbook pipeline."""
 
 from textbook_writer.models.product import (
+    BlindAnswers,
     ChapterReview,
     EditorialState,
     ExerciseVerification,
@@ -11,6 +12,7 @@ from textbook_writer.models.product import (
 )
 
 __all__ = [
+    "BlindAnswers",
     "ChapterReview",
     "EditorialState",
     "ExerciseVerification",

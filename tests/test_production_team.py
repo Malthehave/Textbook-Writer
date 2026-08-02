@@ -77,8 +77,15 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert "do not regenerate it from the plan" in writer.instructions
     assert "On a rewrite, preserve existing figures and assets" in writer.instructions
     assert "frozen during exercise QA" in writer.instructions
+    assert "at most two `exec_command` calls" in writer.instructions
+    assert "Never create or edit `.answers.json`" in writer.instructions
+    assert "publication-fit length revision" in writer.instructions
+    assert "do not call the" in writer.instructions
     assert "Do not estimate final PDF page usage" in reviewer.instructions
     assert "only authority for page count" in reviewer.instructions
+    assert "optional polish" in reviewer.instructions
+    assert "at most one corrective rasterization" in visual.instructions
+    assert "Write exactly that `BlindAnswers` shape" in verifier.instructions
 
 
 def test_agent_capabilities_shell_filesystem_and_optional_skills() -> None:

@@ -51,7 +51,7 @@ def build_html_diagram_agent(*, model: str, book_root: str | Path) -> SandboxAge
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
+            reasoning=Reasoning(effort="medium", summary="auto"),
             verbosity="low",
         ),
         tools=[build_rasterize_html_diagram_tool(root)],

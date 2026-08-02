@@ -9,6 +9,11 @@ Read the target chapter JSON under `production/chapters/`. Author the HTML, call
 image—not your HTML or your expectation of its layout—is the source of truth. Look
 deliberately for overlapping text or objects, clipped or wrapped labels, crossed labels and
 arrows, crowded spacing, tiny type, broken math, and unclear reading order. Revise and
-re-render whenever any defect is visible; attach only a final PNG you have visually judged
-clean and legible. Then update the chapter’s `figures[]` and write the chapter JSON back.
+re-render once if any defect is visible; simplify the visual during that correction so the
+second render is final. Attach only a PNG you have visually judged clean and legible. Then
+update the chapter’s `figures[]` and write the chapter JSON back.
 Reply with a one-line status (figure id + asset path). Do not dump JSON.
+
+Execution budget: read the chapter once, rasterize the initial HTML once, inspect it once,
+perform at most one corrective rasterization, merge the final figure once, and return. Do
+not run unrelated shell diagnostics or repeatedly re-open unchanged files.

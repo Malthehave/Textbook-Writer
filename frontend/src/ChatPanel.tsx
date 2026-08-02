@@ -7,6 +7,10 @@ import {
   type UIMessage,
 } from 'ai'
 import { BookOpenIcon } from 'lucide-react'
+import {
+  BookProgressPanel,
+  type BookProgress,
+} from '@/components/ai-elements/book-progress'
 
 type BookCostTotals = {
   requests: number
@@ -102,6 +106,107 @@ function isSubagentEventPart(
     typeof candidate.data?.outer_tool_call_id === 'string' &&
     typeof candidate.data?.event_type === 'string'
   )
+}
+
+function isBookProgress(value: unknown): value is BookProgress {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<BookProgress>
+  return (
+    typeof candidate.status === 'string' &&
+    Array.isArray(candidate.chapters) &&
+    typeof candidate.milestones?.completed === 'number' &&
+    typeof candidate.milestones?.total === 'number'
+  )
+}
+
+function inputText(input: unknown): string {
+  if (typeof input === 'string') return input
+  try {
+    return JSON.stringify(input)
+  } catch {
+    return ''
+  }
+}
+
+function chapterLabel(input: unknown): string {
+  const match = inputText(input).match(/\bch(?:apter)?[\s_-]*(\d+)\b/i)
+  return match ? `Chapter ${match[1]}` : 'the chapter'
+}
+
+function toolActivity(toolName: string, input: unknown): string {
+  const text = inputText(input)
+  const chapter = chapterLabel(input)
+  if (toolName === 'research-architect') return 'Researching and grounding the scope'
+  if (toolName === 'curriculum-architect') return 'Planning the textbook curriculum'
+  if (toolName === 'chapter-writer') {
+    return /\b(revis|rewrit|fix|update)\w*/i.test(text)
+      ? `Revising ${chapter}`
+      : `Writing ${chapter}`
+  }
+  if (toolName === 'chapter-reviewer') return `Reviewing ${chapter}`
+  if (toolName === 'independent-verifier') {
+    return `Solving ${chapter} exercises independently`
+  }
+  if (toolName === 'solution-comparator') {
+    return `Checking ${chapter} exercise answers`
+  }
+  if (toolName === 'html-diagram-author') return `Updating ${chapter} diagram`
+  if (toolName === 'validate-production-artifact') return 'Validating the latest artifact'
+  if (toolName === 'build-textbook-pdf') return 'Compiling and measuring the PDF'
+  return `Running ${toolName.replaceAll('-', ' ')}`
+}
+
+function currentBookActivity(messages: UIMessage[]): string | null {
+  const transcriptEvents: SubagentTranscriptEvent[] = []
+  const parentInputs = new Map<string, unknown>()
+  for (const message of messages) {
+    for (const part of message.parts as unknown[]) {
+      if (isSubagentEventPart(part)) {
+        transcriptEvents.push(part.data)
+        continue
+      }
+      if (!part || typeof part !== 'object') continue
+      const tool = part as { toolCallId?: unknown; input?: unknown }
+      if (typeof tool.toolCallId === 'string' && 'input' in tool) {
+        parentInputs.set(tool.toolCallId, tool.input)
+      }
+    }
+  }
+
+  const finishedNestedCalls = new Set(
+    transcriptEvents
+      .filter((event) => event.event_type === 'tool-output')
+      .map((event) => event.payload.tool_call_id)
+      .filter((callId): callId is string => typeof callId === 'string'),
+  )
+  for (const event of transcriptEvents.toReversed()) {
+    if (
+      event.event_type === 'tool-called' &&
+      event.payload.tool_call_id &&
+      event.payload.tool_name &&
+      !finishedNestedCalls.has(event.payload.tool_call_id)
+    ) {
+      return toolActivity(
+        event.payload.tool_name,
+        event.payload.input ?? parentInputs.get(event.outer_tool_call_id),
+      )
+    }
+  }
+
+  for (const message of messages.toReversed()) {
+    for (const part of [...message.parts].reverse()) {
+      if (part.type !== 'dynamic-tool' && !part.type.startsWith('tool-')) continue
+      const tool = part as DynamicToolUIPart | ToolUIPart
+      if (tool.state !== 'input-available' && tool.state !== 'input-streaming') {
+        continue
+      }
+      return toolActivity(
+        partToolName(tool),
+        'input' in tool ? tool.input : undefined,
+      )
+    }
+  }
+  return null
 }
 
 function humanizeChatError(message: string): { title: string; detail: string } {
@@ -278,6 +383,7 @@ function ChatPanelReady({
   )
   const [input, setInput] = useState('')
   const [bookCost, setBookCost] = useState<BookCostUpdate | null>(null)
+  const [bookProgress, setBookProgress] = useState<BookProgress | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -318,6 +424,37 @@ function ChatPanelReady({
   const stickyError = loadError
     ? { title: 'Could not load history', detail: loadError }
     : chatError
+
+  useEffect(() => {
+    let cancelled = false
+    const refresh = () => {
+      fetch(`/api/sessions/${sessionId}/progress`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await res.text())
+          return res.json() as Promise<unknown>
+        })
+        .then((payload) => {
+          if (!cancelled && isBookProgress(payload)) setBookProgress(payload)
+        })
+        .catch(() => undefined)
+    }
+    refresh()
+    if (!busy) {
+      return () => {
+        cancelled = true
+      }
+    }
+    const interval = window.setInterval(refresh, 1500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [busy, sessionId])
+
+  const currentActivity = useMemo(
+    () => currentBookActivity(messages) ?? (busy ? 'Manager coordinating next stage' : null),
+    [busy, messages],
+  )
 
   const lastMessage = messages.at(-1)
   const waitingForFirstToken =
@@ -367,6 +504,8 @@ function ChatPanelReady({
           </div>
         ) : null}
       </header>
+
+      <BookProgressPanel progress={bookProgress} activity={currentActivity} />
 
       <Conversation className="min-h-0">
         <ConversationContent className="gap-5 px-5 py-3">

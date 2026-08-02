@@ -51,7 +51,8 @@ Before re-running a stage, `ls production/`. Resume from disk when a good artifa
 After any specialist writes a canonical JSON artifact, call
 `validate-production-artifact` on that path before advancing. A validation failure belongs
 to that producing stage: give the exact error back to the same specialist and validate its
-correction. Never defer schema or figure-path validation until PDF publication.
+single focused correction. If the correction remains invalid, stop and report the contract
+failure rather than looping. Never defer schema or figure-path validation until publication.
 
 ## Phase order (mandatory)
 
@@ -64,6 +65,9 @@ Page count constrains scope, never typography. Reserve 25–35% for figures, exe
 answers, front matter, and bibliography; budget remaining prose at roughly 350–500 words
 per page. Typical exercise density is 2–3 per compact chapter, 3–5 intermediate, and 5–8
 deep, with focused, applied, and synthesis practice rather than one omnibus prompt.
+For targets of 6 pages or fewer, the plan must contain 1 chapter, at most 3 exercises, and
+at most 1 visual. For 7–8 pages, it may contain at most 2 chapters, 6 exercises, and 2
+visuals.
 
 ### B — Research
 `research-architect` → `research.json` (web search; follow `$research`).
@@ -93,11 +97,10 @@ Create `production/editorial-state.json` after accepting the plan:
 ### D — Per chapter (plan order)
 1. `chapter-writer` → chapter JSON **and** its figures (author calls the diagrammer)
 2. Validate the chapter JSON and referenced figure files
-3. In one response, call `chapter-reviewer` and `independent-verifier`; the SDK runs both
-   concurrently with a maximum tool concurrency of two.
-4. Validate and open the review. Keep the blind answers speculative until editorial approval.
-5. **Editorial gate (mandatory — never skip)**.
-6. On approval, freeze prose/figures and update `production/editorial-state.json`.
+3. Call `chapter-reviewer`, validate its review, and apply the editorial gate.
+4. Do not invoke the blind verifier for an editorially rejected draft.
+5. On approval, freeze prose/figures and update `production/editorial-state.json`.
+6. Call `independent-verifier` and validate its `BlindAnswers` artifact.
 7. In one response, call `solution-comparator` for this chapter and, if another chapter
    remains, `chapter-writer` for the next chapter. They touch different files and run
    concurrently.
@@ -111,13 +114,13 @@ previous chapter is editorially approved and recorded in editorial state.
 The reviewer is evidence, not the decision-maker. Inspect `decision`, `summary`, and every
 note. Confirm the draft fits the full plan and accepted book, not only its own chapter brief.
 
-If the decision is `revise`, discard the speculative answers and do not compare them. Call
-`chapter-writer` with the
+If the decision is `revise`, do not invoke the blind solver. Call `chapter-writer` with the
 chapter id and instruct it to read the existing chapter JSON and its `.review.json` from the
 shared filesystem, revise the chapter in place, and preserve everything unaffected by the
-notes. The review file is the canonical brief. Re-run reviewer and blind verifier together,
-then reopen the review. Allow at most two editorial rewrite cycles after the initial draft.
-If it still does not approve, stop and report the unresolved notes.
+notes. The review file is the canonical brief. Re-run the reviewer, then reopen the review.
+For targets of 8 pages or fewer, allow one editorial rewrite after
+the initial draft; for longer books, allow at most two. If it still does not approve, stop
+and report the unresolved notes.
 
 If the decision is `approve`, freeze prose and figures. Immediately update editorial state:
 
@@ -141,9 +144,9 @@ on frozen editorial content.
 4. Re-run `solution-comparator`.
 5. Re-open `.verification.json`. Repeat the gate.
 
-**Cap:** at most **two** rewrite cycles per chapter after the first compare (initial write +
-up to two fix passes). If still not all-`approve`, stop and tell the learner which exercises
-failed and why (quote `notes`) — do not publish that chapter’s broken exercises.
+**Cap:** for targets of 8 pages or fewer, allow one exercise rewrite after the first compare.
+For longer books, allow at most two. If still not all-`approve`, stop and tell the learner
+which exercises failed and why (quote `notes`) — do not publish broken exercises.
 
 #### If every verdict is `approve`
 Chapter is QA-clear. Continue reviewing the next draft or publish when every planned chapter
@@ -165,14 +168,16 @@ If the measured result is outside the range:
 1. Keep the compiled PDF; it remains a usable artifact while fit is corrected.
 2. Read `production/publication-report.json` and identify the smallest scope correction.
 3. Call the affected `chapter-writer` with the existing chapter path and report path. Ask
-   for a targeted in-place length revision, preserving approved substance and figures.
+   for a targeted in-place prose-length revision, preserving exercises, figures, IDs, and
+   assets. Explicitly forbid calling the diagram author unless there is a separate visual
+   defect.
 4. Re-run editorial review and blind exercise QA for every changed chapter, update
    editorial state, and compile again.
 
-Allow at most two publication-fit correction cycles. If the PDF still falls outside the
-range, stop revising, give the learner the latest PDF, and report its measured page count
-and deviation honestly. Never withhold an already compiled PDF solely because it missed
-the target.
+For targets of 8 pages or fewer, allow one publication-fit correction cycle; for longer
+books, allow at most two. If the PDF still falls outside the range, stop revising, give the
+learner the latest PDF, and report its measured page count and deviation honestly. Never
+withhold an already compiled PDF solely because it missed the target.
 
 Do not estimate page consumption from PNG pixels, HTML dimensions, word-count arithmetic,
 or a reviewer's visual guess. Only the measured publication report determines page fit.

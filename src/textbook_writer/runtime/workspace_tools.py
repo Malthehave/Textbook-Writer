@@ -9,6 +9,7 @@ from agents import FunctionTool, function_tool
 from pydantic import BaseModel
 
 from textbook_writer.models.product import (
+    BlindAnswers,
     ChapterReview,
     EditorialState,
     ExerciseVerification,
@@ -107,6 +108,48 @@ def _validate_figure_assets(workspace: Path, chapter: ProductChapter) -> None:
             raise FileNotFoundError(f"figure asset missing at {path}")
 
 
+def _validate_chapter_contract(workspace: Path, chapter: ProductChapter) -> None:
+    production = stages_dir(workspace)
+    research = Research.model_validate_json(
+        (production / "research.json").read_text(encoding="utf-8")
+    )
+    plan = ProductBookPlan.model_validate_json(
+        (production / "book-plan.json").read_text(encoding="utf-8")
+    )
+    planned = next(
+        (item for item in plan.chapters if item.chapter_id == chapter.chapter_id), None
+    )
+    if planned is None:
+        raise ValueError(f"{chapter.chapter_id} is not present in the approved plan")
+    if chapter.learning_outcomes != planned.learning_outcomes:
+        raise ValueError(f"{chapter.chapter_id} learning outcomes must match the plan exactly")
+    if len(chapter.exercises) != planned.exercise_count:
+        raise ValueError(f"{chapter.chapter_id} exercise count must match the plan")
+    allowed_topics = set(planned.topic_refs + planned.supporting_topic_refs)
+    used_topics = {topic for section in chapter.sections for topic in section.topic_refs}
+    if not set(planned.topic_refs) <= used_topics or not used_topics <= allowed_topics:
+        raise ValueError(f"{chapter.chapter_id} section topic refs do not match the plan")
+    source_ids = {source.source_id for source in research.sources}
+    used_sources = {
+        source
+        for section in chapter.sections
+        for source in section.source_refs
+    } | {
+        source
+        for exercise in chapter.exercises
+        for source in exercise.source_refs
+    }
+    if not used_sources <= source_ids:
+        missing = ", ".join(sorted(used_sources - source_ids))
+        raise ValueError(f"{chapter.chapter_id} has unknown source refs: {missing}")
+    if planned.visual is not None:
+        figure_ids = {figure.figure_id for figure in chapter.figures}
+        if planned.visual.visual_id not in figure_ids:
+            raise ValueError(
+                f"{chapter.chapter_id} is missing planned visual {planned.visual.visual_id}"
+            )
+
+
 def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
     relative = PurePosixPath(artifact_path)
     if relative.is_absolute() or ".." in relative.parts:
@@ -121,6 +164,8 @@ def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
         model = ProductBookPlan
     elif artifact_path == "production/editorial-state.json":
         model = EditorialState
+    elif path.name.endswith(".answers.json"):
+        model = BlindAnswers
     elif path.name.endswith(".review.json"):
         model = ChapterReview
     elif path.name.endswith(".verification.json"):
@@ -133,6 +178,36 @@ def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
     validated = model.model_validate_json(path.read_text(encoding="utf-8"))
     if isinstance(validated, ProductChapter):
         _validate_figure_assets(workspace, validated)
+        _validate_chapter_contract(workspace, validated)
+    elif isinstance(validated, BlindAnswers):
+        chapter_path = path.with_name(f"{validated.chapter_ref}.json")
+        chapter = ProductChapter.model_validate_json(
+            chapter_path.read_text(encoding="utf-8")
+        )
+        expected = {exercise.exercise_id for exercise in chapter.exercises}
+        actual = {answer.exercise_ref for answer in validated.answers}
+        if actual != expected:
+            raise ValueError(
+                f"{validated.chapter_ref} blind answers must cover every exercise exactly once"
+            )
+    elif isinstance(validated, ChapterReview):
+        expected_ref = path.name.removesuffix(".review.json")
+        if validated.chapter_ref != expected_ref:
+            raise ValueError("chapter review ref must match its filename")
+    elif isinstance(validated, ExerciseVerification):
+        expected_ref = path.name.removesuffix(".verification.json")
+        if validated.chapter_ref != expected_ref:
+            raise ValueError("exercise verification ref must match its filename")
+        chapter_path = path.with_name(f"{validated.chapter_ref}.json")
+        chapter = ProductChapter.model_validate_json(
+            chapter_path.read_text(encoding="utf-8")
+        )
+        expected = {exercise.exercise_id for exercise in chapter.exercises}
+        actual = {verdict.exercise_ref for verdict in validated.verdicts}
+        if actual != expected:
+            raise ValueError(
+                f"{validated.chapter_ref} verification must cover every exercise exactly once"
+            )
     return model.__name__
 
 
@@ -144,7 +219,8 @@ def validate_production_artifact_tool(book_root: Path) -> FunctionTool:
         """Validate one newly written production artifact against its canonical schema.
 
         Call immediately after its producing specialist returns. Supports research, plan,
-        editorial state, chapter, chapter review, and exercise verification JSON.
+        editorial state, chapter, blind answers, chapter review, and exercise verification
+        JSON.
         """
 
         model_name = _validate_production_artifact(workspace, path)

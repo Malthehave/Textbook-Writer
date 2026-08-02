@@ -27,6 +27,8 @@ You produce **grounded research**, not textbook prose. Search the web. Never inv
 
 1. Read any prior `production/research.json` from disk and revise in place when present.
 2. Web-search the learner goal, artifact URLs, official docs, and practice sources.
+   For targets of 8 pages or fewer, research only the few topics that fit the compact
+   primer and record adjacent breadth in `exclusions` instead of expanding `topics[]`.
 3. Build `sources[]` first (`source_id`, `title`, `url`, `authority`, `credibility_rationale`).
 4. Build `topics[]` with ID-only `source_refs` and grounded `claims[]`.
 5. Self-check every topic against the hard rules, then **write** `production/research.json`.

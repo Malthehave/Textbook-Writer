@@ -6,6 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from textbook_writer.models.product import (
+    BlindAnswer,
+    BlindAnswers,
     ChapterReview,
     EditorialState,
     ExerciseVerdict,
@@ -43,14 +45,21 @@ def _research() -> Research:
                 url="https://example.com/guide",
                 authority="canonical",
                 credibility_rationale="Primary technical documentation.",
-            )
+            ),
+            ProductSource(
+                source_id="source-2",
+                title="Production queue guide",
+                url="https://docs.example.org/queues",
+                authority="official",
+                credibility_rationale="Official operational documentation.",
+            ),
         ],
         topics=[
             ResearchedTopic(
                 topic_id="topic-1",
                 title="Bounded queues",
                 learning_outcomes=["Explain backpressure."],
-                source_refs=["source-1"],
+                source_refs=["source-1", "source-2"],
                 claims=[
                     GroundedClaim(
                         claim_id="claim-1",
@@ -179,6 +188,22 @@ def _verification(count: int = 3, *, decision: str = "approve") -> ExerciseVerif
     )
 
 
+def _blind_answers(count: int = 3) -> BlindAnswers:
+    return BlindAnswers(
+        chapter_ref="chapter-1",
+        answers=[
+            BlindAnswer(
+                exercise_ref=f"exercise-{index + 1}",
+                answer=f"Independent answer {index + 1}.",
+                reasoning=f"Independent reasoning {index + 1}.",
+                ambiguity="none",
+                source_refs=["source-1"],
+            )
+            for index in range(count)
+        ],
+    )
+
+
 def test_product_book_enforces_planned_exercises_visuals_and_approval() -> None:
     ProductBook(
         book_id="book-1",
@@ -216,6 +241,22 @@ def test_product_book_enforces_planned_exercises_visuals_and_approval() -> None:
         )
 
 
+def test_short_book_plan_has_proportional_scope() -> None:
+    payload = _plan().model_dump(mode="json")
+    payload["target_pages"] = 6
+    payload["chapters"] = [
+        {**payload["chapters"][0], "chapter_id": f"chapter-{index}"}
+        for index in range(1, 3)
+    ]
+    with pytest.raises(ValidationError, match="at most 1 chapter"):
+        ProductBookPlan.model_validate(payload)
+
+    payload["chapters"] = [payload["chapters"][0]]
+    payload["chapters"][0]["exercise_count"] = 4
+    with pytest.raises(ValidationError, match="at most 3 exercises"):
+        ProductBookPlan.model_validate(payload)
+
+
 def test_assemble_requires_editorial_acceptance_and_existing_figure(tmp_path: Path) -> None:
     stages = tmp_path / "production"
     chapters = stages / "chapters"
@@ -226,6 +267,7 @@ def test_assemble_requires_editorial_acceptance_and_existing_figure(tmp_path: Pa
     write_model(stages / "research.json", _research())
     write_model(stages / "book-plan.json", _plan())
     write_model(chapters / "chapter-1.json", _chapter())
+    write_model(chapters / "chapter-1.answers.json", _blind_answers())
     write_model(
         chapters / "chapter-1.review.json",
         ChapterReview(
@@ -251,6 +293,17 @@ def test_assemble_requires_editorial_acceptance_and_existing_figure(tmp_path: Pa
         _validate_production_artifact(tmp_path, "production/chapters/chapter-1.json")
         == "ProductChapter"
     )
+    assert (
+        _validate_production_artifact(
+            tmp_path, "production/chapters/chapter-1.answers.json"
+        )
+        == "BlindAnswers"
+    )
+    write_model(chapters / "chapter-1.answers.json", _chapter())
+    with pytest.raises(ValidationError):
+        _validate_production_artifact(
+            tmp_path, "production/chapters/chapter-1.answers.json"
+        )
 
     assembled = _assemble_book(tmp_path)
     assert assembled.chapters[0].figures[0].asset_path == "assets/figures/visual-1.png"

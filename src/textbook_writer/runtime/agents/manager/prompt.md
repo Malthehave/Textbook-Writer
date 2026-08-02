@@ -56,9 +56,10 @@ filesystem. Its short return is status, while the files it writes are durable sh
 for you and later specialists.
 
 Every production artifact must pass `validate-production-artifact` immediately after its
-producer returns. Do not advance phases on an invalid file. Give the exact validation error
-back to the same producer for a focused correction; publishing must never be used to discover
-or migrate stale research, plan, chapter, review, or verification schemas.
+producer returns, including `.answers.json`. Do not advance phases on an invalid file. Give
+the exact validation error back to the same producer for one focused correction; if that
+correction still fails, stop and report it rather than entering a schema-repair loop.
+Publishing must never be used to discover or migrate stale schemas.
 
 Pipeline (mandatory order):
 
@@ -69,22 +70,24 @@ Pipeline (mandatory order):
 3. **Curriculum** — `curriculum-architect` writes `production/book-plan.json` (include
    `target_pages` from the agreed scope). You create an empty
    `production/editorial-state.json` for the agreed book arc.
-4. **Per chapter, bounded wavefront** — After `chapter-writer` finishes and its artifact
-   validates, call `chapter-reviewer` and `independent-verifier` together in one response so
-   they execute concurrently. If editorial review requests revision, discard the speculative
-   answers, revise, and run both again. Once editorial review approves, freeze that chapter's
-   prose and figures and update `editorial-state.json`. Then call `solution-comparator` for
-   that chapter and, when another chapter remains, `chapter-writer` for the next chapter
-   together. Exercise QA may revise only exercise prompts, answers, and reasoning; it must
-   never alter frozen prose or figures. Each gate allows at most two rewrite cycles.
+4. **Per chapter, bounded wavefront** — After `chapter-writer` finishes and validates, run
+   `chapter-reviewer` first. Do not spend a blind-solver run on prose that editorial review
+   has rejected. If review requests revision, revise in place and review again. Once review
+   approves, freeze the prose/figures and update `editorial-state.json`; then run
+   `independent-verifier` for that accepted chapter. After its answers validate, call
+   `solution-comparator` and, when another chapter remains, `chapter-writer` for the next
+   chapter together. Exercise QA may revise only exercise prompts, answers, and reasoning.
+   For targets of 8 pages or fewer, allow at most one editorial and one exercise rewrite;
+   longer books retain the two-rewrite cap.
 5. **Publish and measure** — When every planned chapter is all-`approve` on disk, call
    `build-textbook-pdf`. It always produces the current PDF plus
    `production/publication-report.json`. Accept a measured result within the inclusive
    15%-tolerance range reported by the tool; do not demand the exact target page count.
    If outside that range, use the report for a targeted scope revision and run the changed
-   chapters back through editorial and exercise QA before recompiling. Allow at most two
-   publication-fit cycles. If the result still misses, give the learner the latest PDF and
-   state the measured deviation instead of withholding the artifact.
+   chapters back through editorial and exercise QA before recompiling. Allow one
+   publication-fit cycle for targets of 8 pages or fewer and at most two for longer books.
+   If the result still misses, give the learner the latest PDF and state the measured
+   deviation instead of withholding the artifact.
 
 Also available: Shell + file editor for inspection; `build-textbook-pdf` for compile.
 Never Shell-import the app package to “run publish”—use the tool.
@@ -115,8 +118,8 @@ Never Shell-import the app package to “run publish”—use the tool.
   not publish until every planned chapter is all-`approve` on disk.
 - Editorial gate: after every `chapter-reviewer` call, read
   `production/chapters/<id>.review.json`. For `revise`, point the next `chapter-writer`
-  call to that canonical file and the existing chapter, then re-run review and blind solve.
-  Speculative answers may proceed in parallel but may only reach comparison after approval.
+  call to that canonical file and the existing chapter, then re-run review. Start blind
+  solving only after editorial approval so rejected drafts do not consume solver runs.
 - Immediately after editorial approval, update `production/editorial-state.json` with the
   accepted frozen chapter, established concepts and terms, running-system changes, reusable
   examples, and open threads. This lets the next writer start while the approved chapter's

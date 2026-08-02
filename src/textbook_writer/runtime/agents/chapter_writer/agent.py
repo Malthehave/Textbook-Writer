@@ -43,7 +43,7 @@ def build_chapter_writer_agent(
                     "purpose, caption, and target section. Call after the chapter draft exists. "
                     "Returns a short status."
                 ),
-                max_turns=32,
+                max_turns=12,
                 run_config=run_config,
                 hooks=hooks,
             ),

@@ -55,7 +55,8 @@ def test_manager_enforces_editorial_gate_and_shared_state(tmp_path: Path) -> Non
     assert "15%-tolerance range" in agent.instructions
     assert "give the learner the latest PDF" in agent.instructions
     assert "must pass `validate-production-artifact`" in agent.instructions
-    assert "call `chapter-reviewer` and `independent-verifier` together" in agent.instructions
+    assert "Do not spend a blind-solver run" in agent.instructions
+    assert "targets of 8 pages or fewer" in agent.instructions
     assert "Never run two chapter writers concurrently" in agent.instructions
     assert "You can use `web_search` directly" in agent.instructions
     assert "Formal subject research still belongs" in agent.instructions
@@ -63,10 +64,13 @@ def test_manager_enforces_editorial_gate_and_shared_state(tmp_path: Path) -> Non
         Path(__file__).resolve().parents[1]
         / "src/textbook_writer/runtime/agents/manager/skills/manager-orchestration/SKILL.md"
     ).read_text(encoding="utf-8")
-    assert "rewrite cycles after the initial draft" in skill
+    assert "allow one editorial rewrite after" in skill
     assert "The next chapter may now be drafted" in skill
     assert "The review file is the canonical brief" in skill
     assert "six-page target accepts five through seven pages" in skill
+    assert "allow one publication-fit correction cycle" in skill
     assert "Do not estimate page consumption from PNG pixels" in skill
     assert "Never defer schema or figure-path validation" in skill
-    assert "reviewer and blind verifier together" in skill
+    assert "do not invoke the blind solver" in skill
+    assert "6 pages or fewer" in skill
+    assert "at most 3 exercises" in skill
