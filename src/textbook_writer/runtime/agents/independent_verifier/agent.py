@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from agents import ModelSettings
 from agents.sandbox import SandboxAgent
+from openai.types.shared_params import Reasoning
 
-from textbook_writer.models.product import IndependentAnswerSet
-from textbook_writer.runtime.agents._shared import load_prompt, model_settings
-from textbook_writer.runtime.skills_runtime import skilled_agent_capabilities
+from textbook_writer.runtime.agents import agent_capabilities
 
-PROMPT = load_prompt(__file__)
+PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
 def build_independent_verifier_agent(*, model: str) -> SandboxAgent[Any]:
@@ -18,7 +19,9 @@ def build_independent_verifier_agent(*, model: str) -> SandboxAgent[Any]:
         name="Independent exercise solver",
         instructions=PROMPT,
         model=model,
-        model_settings=model_settings(),
-        output_type=IndependentAnswerSet,
-        capabilities=skilled_agent_capabilities("exercise-verification"),
+        model_settings=ModelSettings(
+            reasoning=Reasoning(effort="low"),
+            verbosity="low",
+        ),
+        capabilities=agent_capabilities(__file__),
     )

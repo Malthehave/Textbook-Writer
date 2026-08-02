@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from importlib.resources import files
 
-from textbook_writer.publishing import book_output_stem
-from textbook_writer.publishing.typst import (
+from textbook_writer.runtime.pdf import (
     _plain as typst_plain,
+    book_output_stem,
     markdown_to_typst_content,
 )
 
@@ -48,7 +48,7 @@ def test_markdown_to_typst_content_handles_commonmark_and_math() -> None:
 
 
 def test_textbook_template_numbers_and_centers_display_equations() -> None:
-    template = files("textbook_writer.publishing").joinpath("textbook.typ").read_text(
+    template = files("textbook_writer.runtime").joinpath("textbook.typ").read_text(
         encoding="utf-8"
     )
     assert 'math.equation(numbering: "(1)"' in template

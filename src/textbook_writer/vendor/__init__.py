@@ -1,1 +1,1 @@
-"""Vendored third-party static assets (KaTeX, etc.)."""
+"""Vendored KaTeX assets for diagram PNG rasterization (Playwright only)."""

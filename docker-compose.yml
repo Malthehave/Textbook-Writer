@@ -10,12 +10,13 @@ services:
       - .env
     environment:
       TEXTBOOK_API_ROOT: /app
-      TEXTBOOK_BOOKS_ROOT: /app/output/books
       TEXTBOOK_SESSIONS_DB: /app/output/ui-sessions.sqlite
+      TEXTBOOK_BOOKS_ROOT: /books
       WATCHFILES_FORCE_POLLING: "true"
     volumes:
       - ./src:/app/src
       - ./output:/app/output
+      - ./output/books:/books
       - ./AGENTS.md:/app/AGENTS.md:ro
     command:
       [

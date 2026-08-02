@@ -36,7 +36,6 @@ COPY AGENTS.md ./
 RUN uv sync --frozen --no-dev
 
 ENV TEXTBOOK_API_ROOT=/app
-ENV TEXTBOOK_BOOKS_ROOT=/app/output/books
 ENV TEXTBOOK_SESSIONS_DB=/app/output/ui-sessions.sqlite
 ENV PYTHONUNBUFFERED=1
 

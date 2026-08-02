@@ -13,6 +13,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
+import { LoadingState } from '@/components/ai-elements/loading-state'
 import {
   Message,
   MessageContent,
@@ -29,24 +30,9 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from '@/components/ai-elements/reasoning'
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from '@/components/ai-elements/tool'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { StreamError } from '@/components/ai-elements/stream-error'
+import { TaskRow } from '@/components/ai-elements/task-row'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Spinner } from '@/components/ui/spinner'
-import { SpecialistPanel } from '@/SpecialistPanel'
-import {
-  applySpecialistEvent,
-  isSpecialistTool,
-  type SpecialistDataEvent,
-  type SpecialistRun,
-} from '@/specialists'
 
 function partToolName(part: DynamicToolUIPart | ToolUIPart): string {
   if (part.type === 'dynamic-tool') return part.toolName
@@ -59,14 +45,14 @@ function humanizeChatError(message: string): { title: string; detail: string } {
     return {
       title: 'Stream protocol glitch',
       detail:
-        'The UI got a tool result before its matching tool start (fixed in the API stream mapper). Start a new message; if it repeats, grab /api/sessions/<id>/debug.',
+        'The UI got a tool result before its matching tool start. Send another message to continue.',
     }
   }
   if (lower.includes('network') || lower.includes('failed to fetch')) {
     return {
       title: 'Connection lost',
       detail:
-        'The browser lost the stream (proxy timeout, API reload, or network drop). The run is not still generating — check tool panels above for partial progress, then send another message to continue.',
+        'The browser lost the stream (proxy timeout, API reload, or network drop). Check tool rows above for partial progress, then send another message.',
     }
   }
   if (lower.includes('run failed') || lower.includes('invalid_request_error')) {
@@ -85,19 +71,16 @@ function MessageParts({
   message,
   isLastMessage,
   isStreaming,
-  specialistRuns,
 }: {
   message: UIMessage
   isLastMessage: boolean
   isStreaming: boolean
-  specialistRuns: Record<string, SpecialistRun>
 }) {
   const reasoningParts = message.parts.filter((part) => part.type === 'reasoning')
   const reasoningText = reasoningParts.map((part) => part.text).join('\n\n')
   const lastPart = message.parts.at(-1)
   const isReasoningStreaming =
     isLastMessage && isStreaming && lastPart?.type === 'reasoning'
-
   return (
     <>
       {reasoningParts.length > 0 ? (
@@ -106,64 +89,29 @@ function MessageParts({
           <ReasoningContent>{reasoningText}</ReasoningContent>
         </Reasoning>
       ) : null}
+
       {message.parts.map((part, index) => {
         const key = `${message.id}-${index}`
         if (part.type === 'text') {
           return <MessageResponse key={key}>{part.text}</MessageResponse>
         }
-        if (part.type === 'reasoning') {
-          return null
-        }
+        if (part.type === 'reasoning') return null
         if (part.type === 'dynamic-tool' || part.type.startsWith('tool-')) {
           const toolPart = part as DynamicToolUIPart | ToolUIPart
           const toolName = partToolName(toolPart)
-          const toolCallId = toolPart.toolCallId
-
-          if (isSpecialistTool(toolName)) {
-            return (
-              <SpecialistPanel
-                key={key}
+          return (
+            <div key={key} className="mb-1.5 min-w-0 max-w-full">
+              <TaskRow
                 toolName={toolName}
                 state={toolPart.state}
+                input={'input' in toolPart ? toolPart.input : undefined}
                 output={'output' in toolPart ? toolPart.output : undefined}
-                run={specialistRuns[toolCallId]}
-                defaultOpen={toolPart.state !== 'output-available'}
+                errorText={
+                  'errorText' in toolPart ? toolPart.errorText : undefined
+                }
+                defaultOpen={toolPart.state === 'output-error'}
               />
-            )
-          }
-
-          if (part.type === 'dynamic-tool') {
-            const dynamicPart = part as DynamicToolUIPart
-            return (
-              <Tool key={key} className="mb-3 border-0 bg-muted/50 shadow-none">
-                <ToolHeader
-                  type="dynamic-tool"
-                  state={dynamicPart.state}
-                  toolName={dynamicPart.toolName}
-                />
-                <ToolContent>
-                  {'input' in dynamicPart ? <ToolInput input={dynamicPart.input} /> : null}
-                  <ToolOutput
-                    output={'output' in dynamicPart ? dynamicPart.output : undefined}
-                    errorText={'errorText' in dynamicPart ? dynamicPart.errorText : undefined}
-                  />
-                </ToolContent>
-              </Tool>
-            )
-          }
-
-          const typedPart = part as ToolUIPart
-          return (
-            <Tool key={key} className="mb-3 border-0 bg-muted/50 shadow-none">
-              <ToolHeader type={typedPart.type} state={typedPart.state} />
-              <ToolContent>
-                {'input' in typedPart ? <ToolInput input={typedPart.input} /> : null}
-                <ToolOutput
-                  output={'output' in typedPart ? typedPart.output : undefined}
-                  errorText={'errorText' in typedPart ? typedPart.errorText : undefined}
-                />
-              </ToolContent>
-            </Tool>
+            </div>
           )
         }
         return null
@@ -217,8 +165,8 @@ export function ChatPanel({
       <div className="flex h-full flex-col gap-3 p-5">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-4 w-28" />
-        <Skeleton className="mt-4 h-24 w-full rounded-xl" />
-        <Skeleton className="h-16 w-3/4 rounded-xl" />
+        <Skeleton className="mt-4 h-24 w-full rounded-[var(--radius-lg)]" />
+        <Skeleton className="h-16 w-3/4 rounded-[var(--radius-lg)]" />
       </div>
     )
   }
@@ -255,125 +203,119 @@ function ChatPanelReady({
     [],
   )
   const [input, setInput] = useState('')
-  const [specialistRuns, setSpecialistRuns] = useState<Record<string, SpecialistRun>>({})
-  const [runLabel, setRunLabel] = useState<string | null>(null)
 
   const { messages, sendMessage, status, error, clearError, stop } = useChat({
     id: sessionId,
     messages: initialMessages,
     transport,
-    onData: (dataPart) => {
-      if (dataPart.type === 'data-run-status') {
-        const label = (dataPart.data as { label?: string } | undefined)?.label
-        if (label) setRunLabel(label)
-        return
-      }
-      if (dataPart.type !== 'data-specialist') return
-      const event = dataPart.data as SpecialistDataEvent
-      if (!event?.parentToolCallId) return
-      setSpecialistRuns((current) => applySpecialistEvent(current, event))
+    onError: () => {
+      onActivity()
+    },
+    onFinish: () => {
+      onActivity()
     },
   })
 
   const isStreaming = status === 'streaming'
   const busy = status === 'streaming' || status === 'submitted'
   const chatError = error ? humanizeChatError(error.message) : null
+  const stickyError = loadError
+    ? { title: 'Could not load history', detail: loadError }
+    : chatError
+
+  const lastMessage = messages.at(-1)
+  const waitingForFirstToken =
+    busy &&
+    (!lastMessage ||
+      lastMessage.role !== 'assistant' ||
+      lastMessage.parts.length === 0)
 
   function handleSubmit(message: PromptInputMessage) {
     if (!message.text.trim() || busy) return
-    setRunLabel('Sending…')
     clearError()
-    sendMessage({ text: message.text }).then(() => onActivity())
+    void sendMessage({ text: message.text }).then(() => onActivity())
     setInput('')
   }
 
+  const statusLabel =
+    status === 'submitted'
+      ? 'Waiting for the manager to start…'
+      : waitingForFirstToken
+        ? 'Manager starting…'
+        : 'Manager working…'
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="px-5 pb-1 pt-4">
-        <div className="truncate text-sm font-medium">{sessionTitle}</div>
-        <div className="text-xs text-muted-foreground">Manager conversation</div>
-      </div>
-
-      {busy ? (
-        <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground">
-          <Spinner className="size-3.5" />
-          <span className="min-w-0 flex-1 truncate">
-            {status === 'submitted'
-              ? 'Waiting for the manager to start…'
-              : runLabel || 'Manager working…'}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 px-2 text-xs"
-            onClick={() => stop()}
-          >
-            Stop
-          </Button>
-        </div>
-      ) : null}
-
-      {loadError || chatError ? (
-        <div className="px-4 pt-3">
-          <Alert variant="destructive" className="border-0 bg-destructive/10 shadow-none">
-            <AlertTitle>{loadError ? 'Could not load history' : chatError?.title}</AlertTitle>
-            <AlertDescription className="mt-1 space-y-2">
-              <p className="whitespace-pre-wrap">{loadError || chatError?.detail}</p>
-              {!busy ? (
-                <p className="text-xs text-destructive/80">
-                  The run has stopped. Review failed tools above, then send another message.
-                </p>
-              ) : null}
-              {error ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 border-destructive/30 bg-background/60"
-                  onClick={() => clearError()}
-                >
-                  Dismiss
-                </Button>
-              ) : null}
-            </AlertDescription>
-          </Alert>
-        </div>
-      ) : null}
+      <header className="shrink-0 px-5 pb-2 pt-4">
+        <div className="truncate text-sm font-medium tracking-tight">{sessionTitle}</div>
+        <div className="text-xs text-mist">Manager conversation</div>
+      </header>
 
       <Conversation className="min-h-0">
-        <ConversationContent className="gap-6 px-5 py-4">
+        <ConversationContent className="gap-5 px-5 py-3">
           {messages.length === 0 ? (
             <ConversationEmptyState
-              icon={<BookOpenIcon className="size-10" />}
+              className="mx-auto max-w-md"
+              icon={<BookOpenIcon className="size-9" />}
               title="What should this textbook cover?"
               description="Describe the subject, your level, and any goals. The manager will shape a brief, then research, write, verify, and publish."
             />
           ) : (
-            messages.map((message, index) => (
-              <Message from={message.role} key={message.id}>
-                <MessageContent>
-                  <MessageParts
-                    message={message}
-                    isLastMessage={index === messages.length - 1}
-                    isStreaming={isStreaming}
-                    specialistRuns={specialistRuns}
-                  />
-                </MessageContent>
-              </Message>
-            ))
+            messages.map((message, index) => {
+              const isLast = index === messages.length - 1
+              const emptyAssistant =
+                message.role === 'assistant' &&
+                message.parts.length === 0 &&
+                isLast &&
+                busy
+              return (
+                <Message from={message.role} key={message.id}>
+                  <MessageContent>
+                    {emptyAssistant ? (
+                      <p className="text-sm text-mist">Starting response…</p>
+                    ) : (
+                      <MessageParts
+                        message={message}
+                        isLastMessage={isLast}
+                        isStreaming={isStreaming}
+                      />
+                    )}
+                  </MessageContent>
+                </Message>
+              )
+            })
           )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="px-4 pb-4 pt-1">
+      <div className="shrink-0 space-y-2 border-t border-border/70 bg-surface/90 px-4 pb-4 pt-3 backdrop-blur-sm">
+        <LoadingState
+          active={busy}
+          label={statusLabel}
+          onStop={() => {
+            stop()
+          }}
+        />
+
+        {stickyError ? (
+          <StreamError
+            title={stickyError.title}
+            detail={
+              busy
+                ? stickyError.detail
+                : `${stickyError.detail}\n\nThe run has stopped. Review failed tools above, then send another message.`
+            }
+            onDismiss={error ? () => clearError() : undefined}
+          />
+        ) : null}
+
         <PromptInput onSubmit={handleSubmit} className="relative w-full">
           <PromptInputTextarea
             value={input}
             onChange={(event) => setInput(event.currentTarget.value)}
             placeholder="Ask the manager to build a textbook…"
-            className="pr-12"
+            className="min-h-12 pr-12"
             disabled={busy}
           />
           <PromptInputSubmit

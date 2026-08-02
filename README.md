@@ -1,10 +1,12 @@
 # Textbook Writer
 
-One manager agent compiles a source-grounded textbook: specialists via `Agent.as_tool()`, deterministic acquire/assemble/publish tools.
+One manager agent compiles a source-grounded textbook: specialists via `Agent.as_tool()`,
+plus a deterministic `build-textbook-pdf` tool. Each chat keeps its own directory under
+`output/books/<session-id>/` (never wiped when you start another).
 
 ## Run (hot reload)
 
-Needs `OPENAI_API_KEY` in `.env` (see `.env.example`). Typst and poppler ship in the API image, so PDF publish works out of the box.
+Needs `OPENAI_API_KEY` in `.env` (see `.env.example`). Typst ships in the API image.
 
 ```bash
 npm run build   # first time / when Docker deps change
@@ -18,16 +20,13 @@ Also: `npm run down`, `npm run logs`, `npm test`. Edit `frontend/` or `src/` loc
 
 ### Without Docker
 
-PDF publish shells out to `typst` and `pdftoppm`, so install them first — match the
-image's pinned Typst (`TYPST_VERSION` in `Dockerfile.api`) to keep output identical:
+PDF publish needs `typst` (match `TYPST_VERSION` in `Dockerfile.api`). Prefer Docker so
+`/books` matches the deployment model in `AGENTS.md`.
 
 ```bash
-brew install typst poppler
-```
-
-```bash
+brew install typst
 uv sync
-uv run uvicorn textbook_writer.api.app:app --reload --port 8000
+TEXTBOOK_BOOKS_ROOT=output/books uv run uvicorn textbook_writer.api.app:app --reload --port 8000
 
 cd frontend && npm install && npm run dev
 ```
@@ -41,8 +40,7 @@ Vite proxies `/api` → `:8000`.
 | `src/textbook_writer/api/` | FastAPI + Agents SDK → AI SDK stream |
 | `frontend/` | Vite React + Tailwind + `@ai-sdk/react` |
 | `runtime/agents/` | Manager + specialists |
+| `runtime/pdf.py` | Typst PDF compile |
 | `docker-compose.yml` | Dev API + frontend with live reload |
 
-```bash
-uv run pytest
-```
+See `AGENTS.md` for the pipeline. Run tests with `uv run pytest`.

@@ -1,39 +1,92 @@
 from __future__ import annotations
 
-from agents.sandbox import SandboxAgent
-from agents.sandbox.capabilities import Skills
+from pathlib import Path
 
-from textbook_writer.runtime import PRODUCTION_TEAM, build_manager_agent
+from agents.sandbox import SandboxAgent
+from agents.sandbox.capabilities import Filesystem, Shell, Skills
+
+from textbook_writer.runtime import build_manager_agent
 from textbook_writer.runtime.agents import (
     build_chapter_writer_agent,
+    build_curriculum_architect_agent,
     build_html_diagram_agent,
     build_independent_verifier_agent,
-    team_role_ids,
+    build_research_architect_agent,
+    build_solution_comparator_agent,
 )
-from textbook_writer.runtime.skills_runtime import packaged_skills_root, skills_capability
+from textbook_writer.runtime.agents.manager import build_manager_agent as build_manager
+from textbook_writer.runtime.agents import agent_capabilities
 
 
 def test_production_entry_is_manager_agent() -> None:
     assert callable(build_manager_agent)
 
 
-def test_production_team_covers_core_roles() -> None:
-    roles = set(team_role_ids())
-    assert {
-        "manager",
-        "research-architect",
-        "research-auditor",
-        "acquire-sources",
-        "curriculum-architect",
-        "coverage-auditor",
-        "curriculum-repair",
-        "chapter-writer",
-        "html-diagram-author",
-        "independent-verifier",
-        "bind-citations",
-        "publish",
-    }.issubset(roles)
-    assert any(role.kind == "tool" for role in PRODUCTION_TEAM)
+def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
+    book = tmp_path / "book"
+    book.mkdir()
+    manager = build_manager(model="gpt-5.6-luna", book_root=book)
+    research = build_research_architect_agent(model="gpt-5.6-luna")
+    curriculum = build_curriculum_architect_agent(model="gpt-5.6-luna")
+    writer = build_chapter_writer_agent(model="gpt-5.6-luna", book_root=book)
+    visual = build_html_diagram_agent(model="gpt-5.6-luna", book_root=book)
+    verifier = build_independent_verifier_agent(model="gpt-5.6-luna")
+    comparator = build_solution_comparator_agent(model="gpt-5.6-luna")
+
+    assert _skill_names(manager) == {"manager-orchestration"}
+    assert _skill_names(research) == {"research"}
+    assert _skill_names(curriculum) == set()
+    assert _skill_names(writer) == {"textbook-prose"}
+    assert _skill_names(visual) == {"technical-html-diagram"}
+    assert _skill_names(verifier) == {"exercise-verification"}
+    assert _skill_names(comparator) == {"exercise-verification"}
+
+    writer_tools = {
+        getattr(tool, "name", None) or getattr(tool, "tool_name", None)
+        for tool in writer.tools or []
+    }
+    assert writer_tools == {"html-diagram-author"}
+    manager_tools = {
+        getattr(tool, "name", None) or getattr(tool, "tool_name", None)
+        for tool in manager.tools or []
+    }
+    assert "html-diagram-author" not in manager_tools
+    assert "chapter-writer" in manager_tools
+
+    prose = (
+        Path(__file__).resolve().parents[1]
+        / "src/textbook_writer/runtime/agents/chapter_writer/skills/textbook-prose/SKILL.md"
+    )
+    assert "Google Technical Writing" in prose.read_text(encoding="utf-8")
+    assert "Google Technical Writing" not in writer.instructions
+
+
+def test_agent_capabilities_shell_filesystem_and_optional_skills() -> None:
+    writer_caps = agent_capabilities(
+        str(
+            Path(__file__).resolve().parents[1]
+            / "src/textbook_writer/runtime/agents/chapter_writer/agent.py"
+        )
+    )
+    curriculum_caps = agent_capabilities(
+        str(
+            Path(__file__).resolve().parents[1]
+            / "src/textbook_writer/runtime/agents/curriculum_architect/agent.py"
+        )
+    )
+    assert {Shell, Filesystem, Skills} <= {type(c) for c in writer_caps}
+    assert {Shell, Filesystem} <= {type(c) for c in curriculum_caps}
+    assert Skills not in {type(c) for c in curriculum_caps}
+
+
+def test_agent_prompts_load_from_markdown(tmp_path: Path) -> None:
+    book = tmp_path / "book"
+    book.mkdir()
+    writer = build_chapter_writer_agent(model="gpt-5.6-luna", book_root=book)
+    assert isinstance(writer, SandboxAgent)
+    assert writer.instructions.endswith("\n")
+    assert "research.json" in writer.instructions
+    assert "$textbook-prose" in writer.instructions
 
 
 def _skill_names(agent: SandboxAgent) -> set[str]:
@@ -47,31 +100,3 @@ def _skill_names(agent: SandboxAgent) -> set[str]:
                 )
             )
     return names
-
-
-def test_skilled_specialists_attach_sdk_skills() -> None:
-    writer = build_chapter_writer_agent(model="gpt-5.6-luna")
-    visual = build_html_diagram_agent(model="gpt-5.6-luna")
-    verifier = build_independent_verifier_agent(model="gpt-5.6-luna")
-    assert isinstance(writer, SandboxAgent)
-    assert isinstance(visual, SandboxAgent)
-    assert isinstance(verifier, SandboxAgent)
-    assert writer.name == "Source-grounded textbook chapter writer"
-    assert visual.name == "Technical HTML diagram author"
-    assert "$textbook-prose" in writer.instructions
-    assert "$technical-html-diagram" in visual.instructions
-    packaged = _skill_names(writer)
-    assert "textbook-prose" in packaged
-    assert "technical-html-diagram" in packaged
-    assert "exercise-verification" in packaged
-    assert packaged == _skill_names(visual) == _skill_names(verifier)
-    assert "Google Technical Writing" not in writer.instructions
-    prose = packaged_skills_root() / "textbook-prose" / "SKILL.md"
-    assert "Google Technical Writing" in prose.read_text(encoding="utf-8")
-    assert skills_capability().lazy_from is not None
-
-
-def test_agent_prompts_load_from_markdown() -> None:
-    writer = build_chapter_writer_agent(model="gpt-5.6-luna")
-    assert writer.instructions.endswith("\n")
-    assert "frozen source passages" in writer.instructions

@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from agents import Agent, WebSearchTool
+from agents import ModelSettings, WebSearchTool
+from agents.sandbox import SandboxAgent
+from openai.types.shared_params import Reasoning
 
-from textbook_writer.models.product import ResearchDossier
-from textbook_writer.runtime.agents._shared import load_prompt, model_settings
+from textbook_writer.runtime.agents import agent_capabilities
 
-PROMPT = load_prompt(__file__)
+PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
-def build_research_architect_agent(*, model: str) -> Agent[Any]:
-    return Agent(
+def build_research_architect_agent(*, model: str) -> SandboxAgent[Any]:
+    return SandboxAgent(
         name="Textbook research architect",
         instructions=PROMPT,
         model=model,
-        model_settings=model_settings(web=True),
+        model_settings=ModelSettings(
+            reasoning=Reasoning(effort="medium"),
+            verbosity="low",
+            response_include=["web_search_call.action.sources"],
+        ),
         tools=[WebSearchTool(search_context_size="high", external_web_access=True)],
-        output_type=ResearchDossier,
+        capabilities=agent_capabilities(__file__),
     )

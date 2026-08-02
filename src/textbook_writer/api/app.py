@@ -1,8 +1,7 @@
-"""FastAPI app: stream textbook manager via AI SDK UI message protocol."""
+"""FastAPI routes for the textbook manager UI."""
 
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from textbook_writer.api.debug_log import read_debug_bundle
 from textbook_writer.api.history import session_items_to_ui_messages
 from textbook_writer.api.store import (
     SessionRow,
@@ -23,12 +21,15 @@ from textbook_writer.api.store import (
     find_pdf,
     list_artifacts,
     read_artifact_text,
+    read_debug_bundle,
 )
 from textbook_writer.api.stream import stream_agent_run
-from textbook_writer.runtime.specialist_stream import bind_specialist_queue
+from textbook_writer.runtime.agents import (
+    create_session_book,
+    sandbox_tool_run_config,
+    session_book_root,
+)
 from textbook_writer.runtime.agents.manager import build_manager_agent
-from textbook_writer.runtime.workspace import initialize_workspace
-from textbook_writer.runtime import workspace as workspace_mod
 
 load_dotenv()
 
@@ -36,10 +37,6 @@ API_ROOT = Path(os.environ.get("TEXTBOOK_API_ROOT", Path.cwd())).resolve()
 SESSIONS_DB = Path(
     os.environ.get("TEXTBOOK_SESSIONS_DB", API_ROOT / "output" / "ui-sessions.sqlite")
 ).resolve()
-BOOKS_ROOT_RESOLVED = Path(
-    os.environ.get("TEXTBOOK_BOOKS_ROOT", API_ROOT / "output" / "books")
-).resolve()
-workspace_mod.BOOKS_ROOT = BOOKS_ROOT_RESOLVED
 
 store = SessionStore(SESSIONS_DB)
 app = FastAPI(title="Textbook Writer API", version="0.1.0")
@@ -55,8 +52,6 @@ app.add_middleware(
 
 class CreateSessionResponse(BaseModel):
     id: str
-    book_id: str
-    workspace: str
     title: str
 
 
@@ -86,6 +81,22 @@ def _last_user_text(messages: list[dict[str, Any]]) -> str:
     raise HTTPException(status_code=400, detail="no user message in request")
 
 
+def _book_root(session_id: str) -> Path:
+    try:
+        root = session_book_root(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail="book workspace not found")
+    return root
+
+
+def _agent_session(row: SessionRow, book_root: Path) -> SQLiteSession:
+    session_db = book_root / "state" / "product-sessions.sqlite"
+    session_db.parent.mkdir(parents=True, exist_ok=True)
+    return SQLiteSession(f"{row.id}-manager", db_path=session_db)
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -96,8 +107,6 @@ def get_sessions() -> list[dict[str, str]]:
     return [
         {
             "id": row.id,
-            "book_id": row.book_id,
-            "workspace": row.workspace,
             "title": row.title,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
@@ -108,28 +117,15 @@ def get_sessions() -> list[dict[str, str]]:
 
 @app.post("/api/sessions", response_model=CreateSessionResponse)
 def create_session() -> CreateSessionResponse:
-    BOOKS_ROOT_RESOLVED.mkdir(parents=True, exist_ok=True)
-    workspace = initialize_workspace()
     session_id = f"session-{uuid4().hex[:10]}"
-    row = store.create(
-        session_id=session_id,
-        book_id=workspace.book_id,
-        workspace=workspace.root,
-        title="Untitled book",
-    )
-    return CreateSessionResponse(
-        id=row.id,
-        book_id=row.book_id,
-        workspace=row.workspace,
-        title=row.title,
-    )
-
-
-def _agent_session(row: SessionRow) -> SQLiteSession:
-    workspace = Path(row.workspace)
-    session_db = workspace / "state" / "product-sessions.sqlite"
-    session_db.parent.mkdir(parents=True, exist_ok=True)
-    return SQLiteSession(f"{row.book_id}-manager", db_path=session_db)
+    try:
+        create_session_book(session_id)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=500, detail="book workspace collision") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    row = store.create(session_id=session_id, title="Untitled book")
+    return CreateSessionResponse(id=row.id, title=row.title)
 
 
 @app.get("/api/sessions/{session_id}/messages")
@@ -137,22 +133,21 @@ async def session_messages(session_id: str) -> list[dict[str, Any]]:
     row = store.get(session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="session not found")
-    session = _agent_session(row)
+    book_root = _book_root(session_id)
+    session = _agent_session(row, book_root)
     items = await session.get_items()
     return session_items_to_ui_messages([dict(item) for item in items])
 
 
 @app.get("/api/sessions/{session_id}/debug")
 def session_debug(session_id: str) -> dict[str, Any]:
-    """Inspect stream/error logs for a book session (for agent debugging)."""
-
     row = store.get(session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="session not found")
-    bundle = read_debug_bundle(Path(row.workspace))
+    book_root = _book_root(session_id)
+    bundle = read_debug_bundle(book_root)
     bundle["session"] = {
         "id": row.id,
-        "book_id": row.book_id,
         "title": row.title,
         "updated_at": row.updated_at,
     }
@@ -161,10 +156,9 @@ def session_debug(session_id: str) -> dict[str, Any]:
 
 @app.get("/api/sessions/{session_id}/artifacts")
 def session_artifacts(session_id: str) -> list[dict[str, str | int]]:
-    row = store.get(session_id)
-    if row is None:
+    if store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
-    return list_artifacts(Path(row.workspace))
+    return list_artifacts(_book_root(session_id))
 
 
 @app.get("/api/sessions/{session_id}/artifacts/content")
@@ -172,11 +166,10 @@ def session_artifact_content(
     session_id: str,
     path: str = Query(..., min_length=1),
 ) -> dict[str, str]:
-    row = store.get(session_id)
-    if row is None:
+    if store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
     try:
-        content = read_artifact_text(Path(row.workspace), path)
+        content = read_artifact_text(_book_root(session_id), path)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -186,10 +179,9 @@ def session_artifact_content(
 
 @app.get("/api/sessions/{session_id}/pdf")
 def session_pdf(session_id: str) -> FileResponse:
-    row = store.get(session_id)
-    if row is None:
+    if store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
-    pdf = find_pdf(Path(row.workspace))
+    pdf = find_pdf(_book_root(session_id))
     if pdf is None:
         raise HTTPException(status_code=404, detail="no PDF yet")
     return FileResponse(pdf, media_type="application/pdf", filename=pdf.name)
@@ -197,12 +189,11 @@ def session_pdf(session_id: str) -> FileResponse:
 
 @app.get("/api/sessions/{session_id}/files/{file_path:path}")
 def session_file(session_id: str, file_path: str) -> FileResponse:
-    row = store.get(session_id)
-    if row is None:
+    if store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
-    workspace = Path(row.workspace).resolve()
-    path = (workspace / file_path).resolve()
-    if not path.is_relative_to(workspace) or not path.is_file():
+    root = _book_root(session_id)
+    path = (root / file_path).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
         raise HTTPException(status_code=404, detail="file not found")
     return FileResponse(path)
 
@@ -219,10 +210,10 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     if row is None:
         raise HTTPException(status_code=404, detail="session not found; create one first")
 
+    book_root = _book_root(session_id)
     user_text = _last_user_text(body.messages)
-    workspace = Path(row.workspace)
-    agent = build_manager_agent(workspace=workspace, book_id=row.book_id)
-    session = _agent_session(row)
+    agent = build_manager_agent(book_root=book_root)
+    session = _agent_session(row, book_root)
 
     if row.title == "Untitled book" and user_text:
         title = user_text.strip().splitlines()[0][:80]
@@ -230,23 +221,16 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     else:
         store.touch(session_id)
 
-    # The specialist queue must be bound BEFORE run_streamed(), which eagerly
-    # creates the run-loop task via asyncio.create_task(). A task snapshots the
-    # context at creation, so binding later (inside the stream generator) leaves
-    # on_stream callbacks looking at an unset ContextVar and silently dropping
-    # every nested specialist event.
-    specialist_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    bind_specialist_queue(specialist_queue)
-
     result = Runner.run_streamed(
         agent,
         user_text,
         session=session,
-        max_turns=40,
+        max_turns=1000,
+        run_config=sandbox_tool_run_config(root=book_root),
     )
 
     return StreamingResponse(
-        stream_agent_run(result, queue=specialist_queue, workspace=workspace),
+        stream_agent_run(result),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

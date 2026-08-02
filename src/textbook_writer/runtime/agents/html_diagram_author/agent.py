@@ -2,43 +2,50 @@
 
 from __future__ import annotations
 
+import base64
+from pathlib import Path
 from typing import Any
 
-from agents import ModelSettings
+from agents import FunctionTool, ModelSettings, ToolOutputImage, ToolOutputText, function_tool
 from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
-from pydantic import BaseModel, Field, field_validator
 
-from textbook_writer.runtime.agents._shared import load_prompt
-from textbook_writer.runtime.skills_runtime import skilled_agent_capabilities
+from textbook_writer.runtime.agents import agent_capabilities
+from textbook_writer.runtime.agents.html_diagram_author.render import write_html_diagram
 
-TECHNICAL_HTML_DIAGRAM_SKILL = "technical-html-diagram"
-PROMPT = load_prompt(__file__)
-TASK_PROMPT_TAIL = load_prompt(__file__, name="task_prompt.md").strip()
+PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
-class HtmlDiagramAgentOutput(BaseModel):
-    html: str = Field(min_length=1)
-    caption: str = Field(min_length=1)
-    learning_purpose: str = Field(min_length=1)
-    self_critique: str = Field(min_length=1)
+def build_rasterize_html_diagram_tool(book_root: Path) -> FunctionTool:
+    workspace = Path(book_root)
 
-    @field_validator("html")
-    @classmethod
-    def require_self_contained_html(cls, value: str) -> str:
-        lowered = value.lower()
-        if "<html" not in lowered or "</html>" not in lowered:
-            raise ValueError("html must be a complete HTML document")
-        if 'id="diagram"' not in lowered and "id='diagram'" not in lowered:
-            raise ValueError('html must wrap the figure in id="diagram"')
-        if "http://" in lowered or "https://" in lowered:
-            raise ValueError("html must not reference external URLs")
-        if "<script" in lowered:
-            raise ValueError("html must not include JavaScript")
-        return value.strip()
+    @function_tool(name_override="rasterize-html-diagram")
+    def rasterize_html_diagram(
+        figure_id: str, html: str
+    ) -> list[ToolOutputText | ToolOutputImage]:
+        """Rasterize self-contained diagram HTML to PNG and return the image for visual QA.
+
+        Pass the full HTML document (with #diagram). Returns a status line plus the PNG
+        so you can see clipping, crowding, and math. Fix and re-rasterize if needed.
+        """
+
+        html_rel, png_rel, digest = write_html_diagram(
+            workspace=workspace,
+            figure_id=figure_id,
+            html=html,
+        )
+        png_bytes = (workspace / png_rel).read_bytes()
+        data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+        return [
+            ToolOutputText(text=f"html={html_rel} png={png_rel} sha256={digest}"),
+            ToolOutputImage(image_url=data_url, detail="high"),
+        ]
+
+    return rasterize_html_diagram
 
 
-def build_html_diagram_agent(*, model: str) -> SandboxAgent[Any]:
+def build_html_diagram_agent(*, model: str, book_root: str | Path) -> SandboxAgent[Any]:
+    root = Path(book_root)
     return SandboxAgent(
         name="Technical HTML diagram author",
         instructions=PROMPT,
@@ -47,29 +54,6 @@ def build_html_diagram_agent(*, model: str) -> SandboxAgent[Any]:
             reasoning=Reasoning(effort="high"),
             verbosity="low",
         ),
-        output_type=HtmlDiagramAgentOutput,
-        capabilities=skilled_agent_capabilities(TECHNICAL_HTML_DIAGRAM_SKILL),
+        tools=[build_rasterize_html_diagram_tool(root)],
+        capabilities=agent_capabilities(__file__),
     )
-
-
-def build_diagram_author_prompt(
-    *,
-    topic: str,
-    learning_purpose: str,
-    caption_hint: str = "",
-    running_system: str = "",
-    chapter_title: str = "",
-) -> str:
-    parts = [
-        "Author one pedagogical HTML diagram for a textbook page.\n",
-        f"<topic>{topic}</topic>\n",
-        f"<learning-purpose>{learning_purpose}</learning-purpose>\n",
-    ]
-    if caption_hint.strip():
-        parts.append(f"<caption-hint>{caption_hint.strip()}</caption-hint>\n")
-    if chapter_title.strip():
-        parts.append(f"<chapter-title>{chapter_title.strip()}</chapter-title>\n")
-    if running_system.strip():
-        parts.append(f"<running-system>{running_system.strip()}</running-system>\n")
-    parts.append(TASK_PROMPT_TAIL)
-    return "".join(parts)

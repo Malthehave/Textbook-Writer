@@ -1,4 +1,4 @@
-"""Convert Agents SDK SQLite session items → AI SDK UIMessage shapes."""
+"""Agents SDK session items → AI SDK UIMessage shapes."""
 
 from __future__ import annotations
 
@@ -40,10 +40,6 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
 
     messages: list[dict[str, Any]] = []
     pending_tools: dict[str, dict[str, Any]] = {}
-    # Parts stay addressable by call_id after they are flushed into a message.
-    # The dicts are held by reference, so a function_call_output arriving after
-    # a flush still updates the right card instead of creating an orphan named
-    # "tool" with empty input.
     tool_parts: dict[str, dict[str, Any]] = {}
 
     def flush_assistant_tools() -> None:
@@ -52,11 +48,7 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
         parts = list(pending_tools.values())
         pending_tools.clear()
         messages.append(
-            {
-                "id": f"msg_{uuid4().hex}",
-                "role": "assistant",
-                "parts": parts,
-            }
+            {"id": f"msg_{uuid4().hex}", "role": "assistant", "parts": parts}
         )
 
     for item in items:
@@ -93,11 +85,10 @@ def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, 
 
         if item_type == "function_call":
             call_id = str(item.get("call_id") or item.get("id") or uuid4().hex)
-            name = str(item.get("name") or "tool")
             part = {
                 "type": "dynamic-tool",
                 "toolCallId": call_id,
-                "toolName": name,
+                "toolName": str(item.get("name") or "tool"),
                 "state": "input-available",
                 "input": _parse_args(item.get("arguments")),
             }

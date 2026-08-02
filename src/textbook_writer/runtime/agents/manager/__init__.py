@@ -1,9 +1,5 @@
-from textbook_writer.runtime.agents.manager.agent import (
-    build_manager_agent,
-    manager_tool_names,
-)
+from textbook_writer.runtime.agents.manager.agent import build_manager_agent
 
 __all__ = [
     "build_manager_agent",
-    "manager_tool_names",
 ]
