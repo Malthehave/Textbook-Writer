@@ -26,6 +26,7 @@ from textbook_writer.runtime.agents import (
     agent_capabilities,
     sandbox_tool_run_config,
 )
+from textbook_writer.runtime.persona import persona_section
 from textbook_writer.runtime.workspace_tools import (
     build_textbook_pdf_tool,
     validate_production_artifact_tool,
@@ -40,14 +41,19 @@ def build_manager_agent(
     book_root: str | Path,
     hooks: RunHooks[Any] | None = None,
     on_subagent_stream: Callable[[AgentToolStreamEvent], Any] | None = None,
+    learner_persona: str | None = None,
 ) -> SandboxAgent[Any]:
     """Build the textbook manager bound to one chat's book directory."""
 
     root = Path(book_root)
     run_config = sandbox_tool_run_config(root=root)
+    instructions = PROMPT
+    section = persona_section(learner_persona)
+    if section:
+        instructions = f"{PROMPT.rstrip()}\n\n{section}"
     return SandboxAgent(
         name="Textbook manager",
-        instructions=PROMPT,
+        instructions=instructions,
         model=model,
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="medium", summary="auto"),

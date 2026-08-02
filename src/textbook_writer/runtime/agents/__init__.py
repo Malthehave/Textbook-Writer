@@ -80,6 +80,7 @@ from textbook_writer.runtime.agents.independent_verifier.agent import (
     build_independent_verifier_agent,
 )
 from textbook_writer.runtime.agents.manager import build_manager_agent
+from textbook_writer.runtime.agents.persona_interviewer import build_persona_interviewer_agent
 from textbook_writer.runtime.agents.research_architect.agent import build_research_architect_agent
 from textbook_writer.runtime.agents.solution_comparator.agent import (
     build_solution_comparator_agent,
@@ -94,6 +95,7 @@ __all__ = [
     "build_html_diagram_agent",
     "build_independent_verifier_agent",
     "build_manager_agent",
+    "build_persona_interviewer_agent",
     "build_research_architect_agent",
     "build_solution_comparator_agent",
     "create_session_book",

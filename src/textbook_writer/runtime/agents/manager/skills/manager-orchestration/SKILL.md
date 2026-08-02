@@ -57,8 +57,11 @@ failure rather than looping. Never defer schema or figure-path validation until 
 ## Phase order (mandatory)
 
 ### A — Goal
-Chat only. Clarify audience, depth, scope, and length with the learner. Collect HTTPS
-URLs. Do not start research until they confirm the scope in chat.
+Chat only. Clarify audience, depth, scope, length, and learning goals for this book.
+Collect HTTPS URLs relevant to the request. If a Learner persona section is already in your
+instructions, treat it as who-they-are background for personalization—not a curriculum.
+Do not re-ask identity or durable strengths/gaps; still agree this book's goals and scope
+in chat. Do not start research until they confirm the scope in chat.
 
 Pass the agreed audience, depth, scope, and target pages in the curriculum tool input.
 Page count constrains scope, never typography. Reserve 25–35% for figures, exercises,

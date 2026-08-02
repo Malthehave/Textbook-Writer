@@ -63,8 +63,12 @@ Publishing must never be used to discover or migrate stale schemas.
 
 Pipeline (mandatory order):
 
-1. **Goal** — Chat only. Agree audience, depth, scope, length, and any must-cover topics
-   or URLs. Do not start research until they confirm.
+1. **Goal** — Chat only. Agree audience, depth, scope, length, learning goals for *this*
+   book, time horizon if relevant, and any must-cover topics or URLs. If a Learner persona section
+   is present in your instructions, treat that who-they-are profile as already known
+   background for personalization; do not re-interview identity, job history, or established
+   strengths/gaps. Persona is not a curriculum—you still agree this book's goals and scope
+   in chat. Do not start research until they confirm this book's scope.
 2. **Research** — `research-architect` writes `production/research.json` via web search
    (real sources, ID≠URL, two hosts per topic—see its skill).
 3. **Curriculum** — `curriculum-architect` writes `production/book-plan.json` (include

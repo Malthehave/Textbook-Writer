@@ -5,8 +5,10 @@ import {
   FolderIcon,
   FolderOpenIcon,
   PlusIcon,
+  UserRoundIcon,
 } from 'lucide-react'
 import { ChatPanel } from '@/ChatPanel'
+import { PersonaPanel } from '@/PersonaPanel'
 import { StreamError } from '@/components/ai-elements/stream-error'
 import { Button } from '@/components/ui/button'
 import {
@@ -380,6 +382,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [sessionsReady, setSessionsReady] = useState(false)
   const [artifactsOpen, setArtifactsOpen] = useState(false)
+  const [personaOpen, setPersonaOpen] = useState(false)
 
   const refreshSessions = useCallback(async () => {
     const rows = await fetchJSON<Session[]>('/api/sessions')
@@ -562,6 +565,15 @@ export default function App() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setPersonaOpen(true)}
+          >
+            <UserRoundIcon />
+            <span className="hidden sm:inline">Profile</span>
+          </Button>
           {isMobile ? (
             <Button
               type="button"
@@ -606,6 +618,8 @@ export default function App() {
           )}
         </div>
       </SidebarInset>
+
+      <PersonaPanel open={personaOpen} onOpenChange={setPersonaOpen} />
 
       <Sheet open={artifactsOpen} onOpenChange={setArtifactsOpen}>
         <SheetContent side="right" className="w-[min(24rem,94vw)] gap-0 p-0">

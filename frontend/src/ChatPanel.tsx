@@ -121,8 +121,9 @@ function isBookProgress(value: unknown): value is BookProgress {
 
 function inputText(input: unknown): string {
   if (typeof input === 'string') return input
+  if (input == null) return ''
   try {
-    return JSON.stringify(input)
+    return JSON.stringify(input) ?? ''
   } catch {
     return ''
   }

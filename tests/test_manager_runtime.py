@@ -60,6 +60,7 @@ def test_manager_enforces_editorial_gate_and_shared_state(tmp_path: Path) -> Non
     assert "Never run two chapter writers concurrently" in agent.instructions
     assert "You can use `web_search` directly" in agent.instructions
     assert "Formal subject research still belongs" in agent.instructions
+    assert "Learner persona section" in agent.instructions
     skill = (
         Path(__file__).resolve().parents[1]
         / "src/textbook_writer/runtime/agents/manager/skills/manager-orchestration/SKILL.md"

@@ -24,7 +24,9 @@ export function StreamError({
       <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-danger" />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="font-medium text-danger">{title}</p>
-        <p className="whitespace-pre-wrap text-xs text-foreground/80">{detail}</p>
+        <p className="whitespace-pre-wrap break-words text-xs text-foreground/80">
+          {detail}
+        </p>
       </div>
       {onDismiss ? (
         <Button

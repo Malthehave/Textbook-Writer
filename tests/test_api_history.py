@@ -29,6 +29,35 @@ def test_session_items_to_ui_messages_collapses_tools() -> None:
     assert messages[2]["parts"][0]["text"] == "Research finished."
 
 
+def test_session_items_to_ui_messages_restores_hosted_tools_and_reasoning() -> None:
+    messages = session_items_to_ui_messages(
+        [
+            {"role": "user", "content": "Look me up"},
+            {
+                "type": "reasoning",
+                "summary": [{"type": "summary_text", "text": "Checking public sources."}],
+            },
+            {
+                "type": "web_search_call",
+                "id": "ws_1",
+                "status": "completed",
+                "action": {"query": "Malthe Musaeus"},
+            },
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "Found a few public pages."}],
+            },
+        ]
+    )
+    assert [message["role"] for message in messages] == ["user", "assistant", "assistant", "assistant"]
+    assert messages[1]["parts"][0]["type"] == "reasoning"
+    tool = messages[2]["parts"][0]
+    assert tool["toolName"] == "web-search"
+    assert tool["state"] == "output-available"
+    assert messages[3]["parts"][0]["text"] == "Found a few public pages."
+
+
 def test_subagent_transcript_is_persisted_and_restored(tmp_path: Path) -> None:
     store = SessionStore(tmp_path / "sessions.sqlite")
     store.create(session_id="session-1")

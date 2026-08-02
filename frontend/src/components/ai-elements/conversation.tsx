@@ -13,7 +13,7 @@ export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
-    className={cn("relative flex-1 overflow-hidden", className)}
+    className={cn("relative min-w-0 flex-1 overflow-hidden", className)}
     initial="smooth"
     resize="smooth"
     role="log"
@@ -31,9 +31,9 @@ export const ConversationContent = ({
   const { scrollRef, contentRef } = useStickToBottomContext();
 
   return (
-    <ScrollArea className="h-full" viewportRef={scrollRef}>
+    <ScrollArea className="h-full min-w-0" viewportRef={scrollRef}>
       <div
-        className={cn("flex flex-col gap-8 p-4", className)}
+        className={cn("flex w-full min-w-0 max-w-full flex-col gap-8 overflow-x-hidden p-4", className)}
         {...props}
         ref={contentRef}
       >

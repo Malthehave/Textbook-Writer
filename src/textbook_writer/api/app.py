@@ -34,6 +34,17 @@ from textbook_writer.runtime.agents import (
     session_book_root,
 )
 from textbook_writer.runtime.agents.manager import build_manager_agent
+from textbook_writer.runtime.agents.persona_interviewer import (
+    build_persona_interviewer_agent,
+)
+from textbook_writer.runtime.persona import (
+    INTERVIEW_SESSION_ID,
+    interview_session_db,
+    load_persona,
+    persona_dir,
+    persona_path,
+    save_persona,
+)
 from textbook_writer.runtime.usage_ledger import BookCostHooks, load_usage_summary
 
 load_dotenv()
@@ -45,6 +56,7 @@ SESSIONS_DB = Path(
 
 store = SessionStore(SESSIONS_DB)
 active_session_runs: set[str] = set()
+persona_interview_active = False
 app = FastAPI(title="Textbook Writer API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +77,10 @@ class ChatRequest(BaseModel):
     id: str | None = None
     messages: list[dict[str, Any]] = Field(default_factory=list)
     trigger: str | None = None
+
+
+class PersonaUpdateRequest(BaseModel):
+    markdown: str = ""
 
 
 def _last_user_text(messages: list[dict[str, Any]]) -> str:
@@ -135,9 +151,98 @@ def _claim_session_run(session_id: str) -> None:
     active_session_runs.add(session_id)
 
 
+def _claim_persona_interview() -> None:
+    global persona_interview_active
+    if persona_interview_active:
+        raise HTTPException(
+            status_code=409,
+            detail="a persona interview is already running",
+        )
+    persona_interview_active = True
+
+
+async def _stream_persona_interview(result: Any) -> AsyncIterator[str]:
+    global persona_interview_active
+    try:
+        async for chunk in stream_agent_run(result):
+            yield chunk
+    finally:
+        persona_interview_active = False
+
+
+def _interview_session() -> SQLiteSession:
+    db_path = interview_session_db()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return SQLiteSession(INTERVIEW_SESSION_ID, db_path=db_path)
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/persona")
+def get_persona() -> dict[str, Any]:
+    markdown = load_persona()
+    path = persona_path()
+    return {
+        "markdown": markdown,
+        "path": str(path.relative_to(API_ROOT)) if path.is_relative_to(API_ROOT) else str(path),
+        "updated_at": (
+            path.stat().st_mtime_ns if path.is_file() else None
+        ),
+    }
+
+
+@app.put("/api/persona")
+def put_persona(body: PersonaUpdateRequest) -> dict[str, Any]:
+    markdown = save_persona(body.markdown)
+    path = persona_path()
+    return {
+        "markdown": markdown,
+        "path": str(path.relative_to(API_ROOT)) if path.is_relative_to(API_ROOT) else str(path),
+        "updated_at": path.stat().st_mtime_ns if path.is_file() else None,
+    }
+
+
+@app.get("/api/persona/messages")
+async def persona_messages() -> list[dict[str, Any]]:
+    session = _interview_session()
+    items = await session.get_items()
+    return session_items_to_ui_messages([dict(item) for item in items])
+
+
+@app.post("/api/persona/chat")
+async def persona_chat(body: ChatRequest) -> StreamingResponse:
+    global persona_interview_active
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+    _claim_persona_interview()
+    try:
+        user_text = _last_user_text(body.messages)
+        root = persona_dir()
+        agent = build_persona_interviewer_agent()
+        session = _interview_session()
+        result = Runner.run_streamed(
+            agent,
+            user_text,
+            session=session,
+            max_turns=40,
+            run_config=sandbox_tool_run_config(root=root),
+        )
+    except Exception:
+        persona_interview_active = False
+        raise
+
+    return StreamingResponse(
+        _stream_persona_interview(result),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "x-vercel-ai-ui-message-stream": "v1",
+        },
+    )
 
 
 @app.get("/api/sessions")
@@ -301,6 +406,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
             book_root=book_root,
             hooks=cost_hooks,
             on_subagent_stream=on_subagent_stream,
+            learner_persona=load_persona(),
         )
         session = _agent_session(row, book_root)
 

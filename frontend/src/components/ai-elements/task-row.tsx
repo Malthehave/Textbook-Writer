@@ -78,8 +78,8 @@ function PayloadBlock({
       </div>
       <pre
         className={cn(
-          'm-0 min-w-0 rounded-[var(--radius-sm)] bg-panel px-2.5 py-2 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-mist',
-          scrollable && 'max-h-80 overflow-auto',
+          'm-0 max-w-full min-w-0 overflow-x-auto rounded-[var(--radius-sm)] bg-panel px-2.5 py-2 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-mist',
+          scrollable && 'max-h-80 overflow-y-auto',
         )}
       >
         {text}
@@ -212,7 +212,7 @@ export function TaskRow({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="group/row -mx-[3px] flex h-7 w-[calc(100%+6px)] min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-[3px] text-left transition-colors duration-100 hover:bg-panel"
+        className="group/row flex h-7 w-full min-w-0 items-center gap-2 rounded-[var(--radius-sm)] px-[3px] text-left transition-colors duration-100 hover:bg-panel"
       >
         <span className="relative flex size-4 shrink-0 items-center justify-center text-mist">
           {running ? (

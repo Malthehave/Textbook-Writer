@@ -18,6 +18,17 @@ sees that directory. The UI artifact tree labels it `/book`.
 
 PDF: `/books/<session-id>/build/<title-slug>.pdf`. Default model: `gpt-5.6-luna`.
 
+## Learner persona
+
+A durable who-they-are profile lives at `output/learner/persona.md` (outside any book
+session). Edit it in the UI under **Profile**, or interview the persona agent there
+(web search + shared `output/learner/` sandbox). The interviewer builds a self-contained
+360° dossier (synopsis, identity, work experience/CV, education, projects, strengths,
+durable gaps, how they learn)—extracting substance from sources rather than link-dumping
+so later agents need not re-search the learner. Not book goals, time horizons, or
+curriculum. The manager loads that file for personalization; book topic, depth, length,
+and learning goals are still agreed in each textbook chat.
+
 ## Entry
 
 ```bash

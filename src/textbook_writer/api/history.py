@@ -109,6 +109,33 @@ def session_items_to_ui_messages(
             tool_parts[call_id] = part
             continue
 
+        if item_type in {
+            "web_search_call",
+            "file_search_call",
+            "code_interpreter_call",
+            "mcp_call",
+            "local_shell_call",
+            "computer_call",
+            "custom_tool_call",
+        }:
+            call_id = str(item.get("call_id") or item.get("id") or uuid4().hex)
+            tool_name = str(item.get("name") or item_type.replace("_call", "").replace("_", "-"))
+            arguments = item.get("arguments")
+            if arguments is None:
+                arguments = item.get("action") or item.get("input")
+            part = {
+                "type": "dynamic-tool",
+                "toolCallId": call_id,
+                "toolName": tool_name,
+                "state": "output-available" if item.get("status") == "completed" else "input-available",
+                "input": _parse_args(arguments),
+            }
+            if item.get("status") == "completed":
+                part["output"] = item.get("output") or item.get("result") or "completed"
+            pending_tools[call_id] = part
+            tool_parts[call_id] = part
+            continue
+
         if item_type == "function_call_output":
             call_id = str(item.get("call_id") or "")
             part = tool_parts.get(call_id)
@@ -124,6 +151,35 @@ def session_items_to_ui_messages(
                 tool_parts[part["toolCallId"]] = part
             part["state"] = "output-available"
             part["output"] = item.get("output", "")
+            continue
+
+        if item_type == "reasoning":
+            summary = item.get("summary")
+            text = _text_from_content(summary if summary else item.get("content"))
+            if not text.strip():
+                continue
+            flush_assistant_tools()
+            messages.append(
+                {
+                    "id": f"msg_{uuid4().hex}",
+                    "role": "assistant",
+                    "parts": [{"type": "reasoning", "text": text}],
+                }
+            )
+            continue
+
+        if item_type == "message":
+            flush_assistant_tools()
+            text = _text_from_content(item.get("content"))
+            if not text.strip():
+                continue
+            messages.append(
+                {
+                    "id": f"msg_{uuid4().hex}",
+                    "role": str(item.get("role") or "assistant"),
+                    "parts": [{"type": "text", "text": text}],
+                }
+            )
             continue
 
     flush_assistant_tools()
