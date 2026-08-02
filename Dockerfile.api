@@ -10,7 +10,7 @@ ARG TYPST_VERSION=0.15.1
 # poppler-utils supplies pdftoppm for publishing/pdf.py page rendering.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl ca-certificates xz-utils poppler-utils \
+        curl ca-certificates xz-utils poppler-utils ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
