@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 from uuid import uuid4
 
@@ -13,6 +13,8 @@ from openai.types.responses import (
     ResponseReasoningTextDeltaEvent,
     ResponseTextDeltaEvent,
 )
+
+from textbook_writer.api.subagent_events import TOOL_TYPE_NAMES, coalesce_subagent_events
 
 
 def _sse(payload: dict[str, Any] | str) -> str:
@@ -33,14 +35,27 @@ def _call_id(raw: Any) -> str:
 
 def _tool_name(raw: Any) -> str:
     if isinstance(raw, dict):
-        return str(raw.get("name") or "tool")
-    return str(getattr(raw, "name", None) or "tool")
+        name = raw.get("name")
+        item_type = str(raw.get("type") or "")
+    else:
+        name = getattr(raw, "name", None)
+        item_type = str(getattr(raw, "type", None) or "")
+    if name:
+        return str(name)
+    return TOOL_TYPE_NAMES.get(
+        item_type,
+        item_type.replace("_call", "").replace("_", "-") or "tool",
+    )
 
 
 def _tool_arguments(raw: Any) -> Any:
     args = raw.get("arguments") if isinstance(raw, dict) else getattr(raw, "arguments", None)
     if args is None:
+        args = raw.get("action") if isinstance(raw, dict) else getattr(raw, "action", None)
+    if args is None:
         return {}
+    if hasattr(args, "model_dump"):
+        return args.model_dump(mode="json")
     if isinstance(args, str):
         try:
             return json.loads(args)
@@ -84,11 +99,31 @@ def _drain_cost_updates(
     return chunks
 
 
+def _drain_subagent_updates(
+    updates: asyncio.Queue[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    if updates is None:
+        return []
+    events: list[dict[str, Any]] = []
+    while True:
+        try:
+            events.append(updates.get_nowait())
+        except asyncio.QueueEmpty:
+            break
+    return coalesce_subagent_events(events)
+
+
+def _subagent_chunk(event: dict[str, Any]) -> str:
+    return _sse({"type": "data-subagent-event", "data": event})
+
+
 async def stream_agent_run(
     result: Any,
     *,
     cost_updates: asyncio.Queue[dict[str, Any]] | None = None,
     initial_cost: dict[str, Any] | None = None,
+    subagent_updates: asyncio.Queue[dict[str, Any]] | None = None,
+    persist_subagent_events: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> AsyncIterator[str]:
     """Yield AI SDK UI-message-stream SSE chunks from Runner.run_streamed()."""
 
@@ -121,10 +156,26 @@ async def stream_agent_run(
     if initial_cost is not None:
         yield _book_cost_chunk(initial_cost)
 
+    event_iterator = result.stream_events().__aiter__()
+    next_event: asyncio.Task[Any] | None = asyncio.create_task(anext(event_iterator))
     try:
-        async for event in result.stream_events():
+        while next_event is not None:
+            done, _ = await asyncio.wait({next_event}, timeout=0.05)
+            nested_events = _drain_subagent_updates(subagent_updates)
+            if nested_events and persist_subagent_events is not None:
+                persist_subagent_events(nested_events)
+            for nested_event in nested_events:
+                yield _subagent_chunk(nested_event)
             for chunk in _drain_cost_updates(cost_updates):
                 yield chunk
+            if not done:
+                continue
+            try:
+                event = next_event.result()
+            except StopAsyncIteration:
+                next_event = None
+                break
+            next_event = asyncio.create_task(anext(event_iterator))
             etype = getattr(event, "type", None)
 
             if etype == "raw_response_event":
@@ -201,6 +252,12 @@ async def stream_agent_run(
         detail = str(exc).strip() or exc.__class__.__name__
         yield _sse({"type": "error", "errorText": f"Run failed: {detail}"})
     finally:
+        if next_event is not None and not next_event.done():
+            next_event.cancel()
+            try:
+                await next_event
+            except asyncio.CancelledError:
+                pass
         if not bool(getattr(result, "is_complete", False)):
             cancel = getattr(result, "cancel", None)
             if callable(cancel):
@@ -215,6 +272,11 @@ async def stream_agent_run(
         yield chunk
     for chunk in _drain_cost_updates(cost_updates):
         yield chunk
+    nested_events = _drain_subagent_updates(subagent_updates)
+    if nested_events and persist_subagent_events is not None:
+        persist_subagent_events(nested_events)
+    for nested_event in nested_events:
+        yield _subagent_chunk(nested_event)
     yield _sse({"type": "finish-step"})
     yield _sse({"type": "finish"})
     yield _sse("[DONE]")

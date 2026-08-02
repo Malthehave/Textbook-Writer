@@ -35,17 +35,30 @@ def _parse_args(raw: Any) -> Any:
     return raw if raw is not None else {}
 
 
-def session_items_to_ui_messages(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def session_items_to_ui_messages(
+    items: list[dict[str, Any]],
+    *,
+    subagent_events: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Collapse Agents SDK session items into simple UI messages for the chat panel."""
 
     messages: list[dict[str, Any]] = []
     pending_tools: dict[str, dict[str, Any]] = {}
     tool_parts: dict[str, dict[str, Any]] = {}
+    events_by_call: dict[str, list[dict[str, Any]]] = {}
+    for event in subagent_events or []:
+        events_by_call.setdefault(str(event["outer_tool_call_id"]), []).append(event)
 
     def flush_assistant_tools() -> None:
         if not pending_tools:
             return
-        parts = list(pending_tools.values())
+        parts: list[dict[str, Any]] = []
+        for call_id, tool_part in pending_tools.items():
+            parts.append(tool_part)
+            parts.extend(
+                {"type": "data-subagent-event", "data": event}
+                for event in events_by_call.get(call_id, [])
+            )
         pending_tools.clear()
         messages.append(
             {"id": f"msg_{uuid4().hex}", "role": "assistant", "parts": parts}

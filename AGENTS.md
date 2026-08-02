@@ -1,8 +1,10 @@
 # Textbook Writer agent guide
 
 Manager-led compiler: one learner-facing OpenAI Agents SDK manager, specialists via
-`Agent.as_tool()`. Agents use sandbox Shell + Filesystem (+ Skills); research roles also
-get `WebSearchTool`. PDF compile is the manager FunctionTool `build-textbook-pdf`.
+`Agent.as_tool()`. Agents use sandbox Shell + Filesystem (+ Skills). The manager and
+research architect also get `WebSearchTool`; formal subject evidence still belongs in the
+research architect's validated artifact. PDF compile is the manager FunctionTool
+`build-textbook-pdf`.
 This file is the only maintained product doc.
 
 ## Deployment model
@@ -50,10 +52,11 @@ Prefer `docker compose logs api` for live runs.
 1. Chat → agree audience, depth, scope, length with the learner
 2. `research-architect` → `production/research.json` (web search; real HTTPS sources)
 3. `curriculum-architect` → book plan (`target_pages` from agreed scope)
-4. Per chapter: chapter-writer (incl. diagrams) → chapter reviewer → manager editorial gate
-   → independent verifier → solution comparator → manager exercise gate. Each gate rewrites
-   with exact notes (max two fix cycles). Accepted chapters advance
-   `production/editorial-state.json` so fresh specialist runs inherit the book arc.
+4. Per chapter, use a bounded wavefront: chapter-writer → reviewer + blind verifier in
+   parallel → manager editorial gate. Editorial approval freezes prose/figures and advances
+   `production/editorial-state.json`; then the solution comparator for that chapter runs in
+   parallel with the next chapter writer. Exercise QA may change only exercises/answers.
+   Never run two chapter writers concurrently. Tool concurrency is capped at two.
 5. `build-textbook-pdf` → assemble `book.json` + Typst PDF and write
    `production/publication-report.json`. Accept the requested page target within an
    inclusive ±15% measured tolerance (whole-page bounds round outward). If outside, make
@@ -62,7 +65,7 @@ Prefer `docker compose logs api` for live runs.
 
 Manager tools: `build-textbook-pdf`, research-architect, curriculum-architect, chapter-writer,
 chapter-reviewer, independent-verifier, solution-comparator, and
-`validate-production-artifact`. The manager validates each canonical JSON artifact
+`validate-production-artifact`, plus hosted `web_search`. The manager validates each canonical JSON artifact
 immediately after its producer returns, so PDF publication only assembles and compiles
 already-valid state. The chapter-writer owns html-diagram-author as a nested tool (author +
 illustrator); each figure uses one stable HTML path and one stable PNG path.
@@ -73,6 +76,12 @@ tool’s `input` string as the user message (no prior specialist chat history). 
 memory is that chat’s book directory plus whatever brief the manager puts in `input`.
 Only one manager run may be active per chat so overlapping requests cannot race on those
 shared files.
+
+Nested specialist streams are captured through `Agent.as_tool(on_stream=...)`. Visible
+assistant text, reasoning summaries, and nested tool calls/results are streamed into the
+parent chat UI, persisted in the sessions database by outer tool-call ID, and restored into
+the expandable tool row on history load. Raw events are available at
+`/api/sessions/<session-id>/subagent-events`.
 
 ## Non-negotiable rules
 

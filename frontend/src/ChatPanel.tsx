@@ -78,12 +78,30 @@ import {
   ReasoningTrigger,
 } from '@/components/ai-elements/reasoning'
 import { StreamError } from '@/components/ai-elements/stream-error'
-import { TaskRow } from '@/components/ai-elements/task-row'
+import {
+  TaskRow,
+  type SubagentTranscriptEvent,
+} from '@/components/ai-elements/task-row'
 import { Skeleton } from '@/components/ui/skeleton'
 
 function partToolName(part: DynamicToolUIPart | ToolUIPart): string {
   if (part.type === 'dynamic-tool') return part.toolName
   return part.type.slice('tool-'.length)
+}
+
+function isSubagentEventPart(
+  part: unknown,
+): part is { type: 'data-subagent-event'; data: SubagentTranscriptEvent } {
+  if (!part || typeof part !== 'object') return false
+  const candidate = part as {
+    type?: unknown
+    data?: { outer_tool_call_id?: unknown; event_type?: unknown }
+  }
+  return (
+    candidate.type === 'data-subagent-event' &&
+    typeof candidate.data?.outer_tool_call_id === 'string' &&
+    typeof candidate.data?.event_type === 'string'
+  )
 }
 
 function humanizeChatError(message: string): { title: string; detail: string } {
@@ -128,6 +146,14 @@ function MessageParts({
   const lastPart = message.parts.at(-1)
   const isReasoningStreaming =
     isLastMessage && isStreaming && lastPart?.type === 'reasoning'
+  const transcriptByCall = new Map<string, SubagentTranscriptEvent[]>()
+  for (const part of message.parts as unknown[]) {
+    if (!isSubagentEventPart(part)) continue
+    const callId = part.data.outer_tool_call_id
+    const events = transcriptByCall.get(callId) ?? []
+    events.push(part.data)
+    transcriptByCall.set(callId, events)
+  }
   return (
     <>
       {reasoningParts.length > 0 ? (
@@ -156,6 +182,7 @@ function MessageParts({
                 errorText={
                   'errorText' in toolPart ? toolPart.errorText : undefined
                 }
+                transcript={transcriptByCall.get(toolPart.toolCallId) ?? []}
                 defaultOpen={toolPart.state === 'output-error'}
               />
             </div>

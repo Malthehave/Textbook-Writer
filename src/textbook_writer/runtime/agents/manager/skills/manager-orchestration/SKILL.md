@@ -93,35 +93,50 @@ Create `production/editorial-state.json` after accepting the plan:
 ### D — Per chapter (plan order)
 1. `chapter-writer` → chapter JSON **and** its figures (author calls the diagrammer)
 2. Validate the chapter JSON and referenced figure files
-3. `chapter-reviewer` → `production/chapters/<id>.review.json`, then validate the review
-4. **Editorial gate (mandatory — never skip)** — open the review file yourself.
-5. `independent-verifier` — answer-free exercises only (blind QA; you commission this)
-6. `solution-comparator` → `production/chapters/<id>.verification.json`, then validate it
-7. **Exercise QA gate (mandatory — never skip)** — open the verification file with Shell/file
-   editor and inspect every `verdicts[].decision`:
+3. In one response, call `chapter-reviewer` and `independent-verifier`; the SDK runs both
+   concurrently with a maximum tool concurrency of two.
+4. Validate and open the review. Keep the blind answers speculative until editorial approval.
+5. **Editorial gate (mandatory — never skip)**.
+6. On approval, freeze prose/figures and update `production/editorial-state.json`.
+7. In one response, call `solution-comparator` for this chapter and, if another chapter
+   remains, `chapter-writer` for the next chapter. They touch different files and run
+   concurrently.
+8. Validate and open the verification JSON; apply the exercise QA gate.
+
+Never call two chapter writers concurrently. The next writer may start only after the
+previous chapter is editorially approved and recorded in editorial state.
 
 #### Editorial gate
 
 The reviewer is evidence, not the decision-maker. Inspect `decision`, `summary`, and every
 note. Confirm the draft fits the full plan and accepted book, not only its own chapter brief.
 
-If the decision is `revise`, do **not** run exercise QA. Call `chapter-writer` with the
+If the decision is `revise`, discard the speculative answers and do not compare them. Call
+`chapter-writer` with the
 chapter id and instruct it to read the existing chapter JSON and its `.review.json` from the
 shared filesystem, revise the chapter in place, and preserve everything unaffected by the
-notes. The review file is the canonical brief; do not duplicate all of its contents into the
-tool input. Re-run `chapter-reviewer` and reopen the file. Allow at most two editorial
-rewrite cycles after the initial draft. If it still does not approve, stop and report the
-unresolved notes.
+notes. The review file is the canonical brief. Re-run reviewer and blind verifier together,
+then reopen the review. Allow at most two editorial rewrite cycles after the initial draft.
+If it still does not approve, stop and report the unresolved notes.
 
-If the decision is `approve`, proceed to blind exercise QA.
+If the decision is `approve`, freeze prose and figures. Immediately update editorial state:
+
+- append the chapter id to `accepted_chapter_refs`
+- add concepts and canonical terms the reader can now rely on
+- record how the shared running system changed
+- record examples later chapters may reuse without re-explaining
+- keep only still-open promises in `open_threads`
+
+The next chapter may now be drafted while this chapter's comparator runs.
 
 #### If any verdict is `reject` or `revise`
-Do **not** advance to the next chapter or to publish.
+Do not publish, but an already-running next-chapter draft may finish because it depends only
+on frozen editorial content.
 
 1. Open the verification file and confirm every non-`approve` verdict is actionable.
 2. Call `chapter-writer` with the chapter id and exact existing chapter and
-   `.verification.json` paths. Tell it to read both shared files, revise in place, preserve
-   unaffected content, and fix every non-`approve` verdict without paraphrasing away notes.
+   `.verification.json` paths. Tell it to modify only exercises, answers, and reasoning;
+   frozen prose, sections, figures, terminology, and bridges must remain unchanged.
 3. Re-run `independent-verifier` (fresh answers file).
 4. Re-run `solution-comparator`.
 5. Re-open `.verification.json`. Repeat the gate.
@@ -131,15 +146,8 @@ up to two fix passes). If still not all-`approve`, stop and tell the learner whi
 failed and why (quote `notes`) — do not publish that chapter’s broken exercises.
 
 #### If every verdict is `approve`
-Chapter is QA-clear. Update `production/editorial-state.json` before continuing:
-
-- append the chapter id to `accepted_chapter_refs`
-- add concepts and canonical terms the reader can now rely on
-- record how the shared running system changed
-- record examples later chapters may reuse without re-explaining
-- keep only still-open promises in `open_threads`
-
-Then continue to the next chapter (or publish when all planned chapters are clear).
+Chapter is QA-clear. Continue reviewing the next draft or publish when every planned chapter
+has both editorial approval and an all-approve verification file.
 
 Never treat a comparator tool status line as proof of approval — only the verification JSON
 on disk counts.

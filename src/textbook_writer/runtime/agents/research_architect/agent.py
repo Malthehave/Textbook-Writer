@@ -20,7 +20,7 @@ def build_research_architect_agent(*, model: str) -> SandboxAgent[Any]:
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="medium"),
+            reasoning=Reasoning(effort="medium", summary="auto"),
             verbosity="low",
             response_include=["web_search_call.action.sources"],
         ),

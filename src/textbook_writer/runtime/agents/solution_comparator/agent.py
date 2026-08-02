@@ -20,7 +20,7 @@ def build_solution_comparator_agent(*, model: str) -> SandboxAgent[Any]:
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="low"),
+            reasoning=Reasoning(effort="low", summary="auto"),
             verbosity="low",
         ),
         capabilities=agent_capabilities(__file__),

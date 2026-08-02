@@ -43,6 +43,17 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert _skill_names(visual) == {"technical-html-diagram"}
     assert _skill_names(verifier) == {"exercise-verification"}
     assert _skill_names(comparator) == {"exercise-verification"}
+    for specialist in (
+        research,
+        curriculum,
+        writer,
+        reviewer,
+        visual,
+        verifier,
+        comparator,
+    ):
+        assert specialist.model_settings.reasoning is not None
+        assert specialist.model_settings.reasoning.summary == "auto"
 
     writer_tools = {
         getattr(tool, "name", None) or getattr(tool, "tool_name", None)
@@ -65,6 +76,7 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert "Google Technical Writing" not in writer.instructions
     assert "do not regenerate it from the plan" in writer.instructions
     assert "On a rewrite, preserve existing figures and assets" in writer.instructions
+    assert "frozen during exercise QA" in writer.instructions
     assert "Do not estimate final PDF page usage" in reviewer.instructions
     assert "only authority for page count" in reviewer.instructions
 

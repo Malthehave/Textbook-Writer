@@ -20,7 +20,7 @@ def build_chapter_reviewer_agent(*, model: str) -> SandboxAgent[Any]:
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high"),
+            reasoning=Reasoning(effort="high", summary="auto"),
             verbosity="low",
         ),
         capabilities=agent_capabilities(__file__),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -29,6 +30,25 @@ def _connect(db_path: Path) -> sqlite3.Connection:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subagent_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            outer_tool_call_id TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_subagent_events_session_call
+        ON subagent_events (session_id, outer_tool_call_id, id)
         """
     )
     conn.commit()
@@ -80,6 +100,65 @@ class SessionStore:
                     (now, title, session_id),
                 )
             conn.commit()
+
+    def append_subagent_events(
+        self, session_id: str, events: list[dict[str, Any]]
+    ) -> None:
+        if not events:
+            return
+        now = datetime.now(UTC).isoformat()
+        with _connect(self.db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO subagent_events (
+                    session_id,
+                    outer_tool_call_id,
+                    agent_name,
+                    event_type,
+                    payload_json,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        session_id,
+                        str(event["outer_tool_call_id"]),
+                        str(event["agent_name"]),
+                        str(event["event_type"]),
+                        json.dumps(event.get("payload", {}), default=str),
+                        now,
+                    )
+                    for event in events
+                ],
+            )
+            conn.commit()
+
+    def list_subagent_events(self, session_id: str) -> list[dict[str, Any]]:
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    outer_tool_call_id,
+                    agent_name,
+                    event_type,
+                    payload_json,
+                    created_at
+                FROM subagent_events
+                WHERE session_id = ?
+                ORDER BY id
+                """,
+                (session_id,),
+            ).fetchall()
+        return [
+            {
+                "outer_tool_call_id": row["outer_tool_call_id"],
+                "agent_name": row["agent_name"],
+                "event_type": row["event_type"],
+                "payload": json.loads(row["payload_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
 
 
 def list_artifacts(root: Path) -> list[dict[str, str | int]]:

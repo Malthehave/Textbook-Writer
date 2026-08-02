@@ -31,7 +31,7 @@ def build_chapter_writer_agent(
         instructions=PROMPT,
         model=model,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="medium"),
+            reasoning=Reasoning(effort="medium", summary="auto"),
             verbosity="low",
         ),
         tools=[

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -20,6 +21,7 @@ from textbook_writer.api.app import (
 )
 from textbook_writer.api.history import session_items_to_ui_messages
 from textbook_writer.api.stream import stream_agent_run
+from textbook_writer.api.subagent_events import normalize_subagent_event
 
 AGENT = Agent(name="manager")
 
@@ -88,6 +90,23 @@ async def _drain(run: FakeRun) -> list[str]:
     return chunks
 
 
+async def _drain_with_subagent_event(
+    run: FakeRun,
+    event: dict[str, Any],
+) -> tuple[list[str], list[dict[str, Any]]]:
+    updates: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    await updates.put(event)
+    persisted: list[dict[str, Any]] = []
+    chunks: list[str] = []
+    async for chunk in stream_agent_run(
+        run,
+        subagent_updates=updates,
+        persist_subagent_events=persisted.extend,
+    ):
+        chunks.append(chunk)
+    return chunks, persisted
+
+
 def test_text_then_tool_then_output() -> None:
     run = FakeRun(
         [
@@ -106,6 +125,65 @@ def test_text_then_tool_then_output() -> None:
     assert "tool-output-available" in types
     assert "finish" in types
     assert run.cancelled is False
+
+
+def test_nested_agent_event_streams_and_persists() -> None:
+    event = {
+        "outer_tool_call_id": "call_A",
+        "agent_name": "Chapter writer",
+        "event_type": "assistant-delta",
+        "payload": {"text": "Drafting the worked example."},
+    }
+    chunks, persisted = asyncio.run(
+        _drain_with_subagent_event(FakeRun([_text_delta("Manager")]), event)
+    )
+    payloads = [
+        json.loads(chunk.removeprefix("data: ").strip())
+        for chunk in chunks
+        if chunk.startswith("data: {")
+    ]
+    nested = [item for item in payloads if item["type"] == "data-subagent-event"]
+    assert nested[0]["data"] == event
+    assert persisted == [event]
+
+
+def test_nested_agent_sdk_event_is_normalized() -> None:
+    event = normalize_subagent_event(
+        {
+            "event": _text_delta("Inspecting the chapter."),
+            "agent": AGENT,
+            "tool_call": {"call_id": "outer-1"},
+        }
+    )
+    assert event == {
+        "outer_tool_call_id": "outer-1",
+        "agent_name": "manager",
+        "event_type": "assistant-delta",
+        "payload": {"text": "Inspecting the chapter."},
+    }
+
+
+def test_hosted_nested_tool_gets_a_descriptive_name_and_action() -> None:
+    event = normalize_subagent_event(
+        {
+            "event": SimpleNamespace(
+                type="run_item_stream_event",
+                name="tool_called",
+                item=SimpleNamespace(
+                    raw_item={
+                        "id": "search-1",
+                        "type": "web_search_call",
+                        "action": {"query": "distributed RL"},
+                    }
+                ),
+            ),
+            "agent": AGENT,
+            "tool_call": {"call_id": "outer-1"},
+        }
+    )
+    assert event is not None
+    assert event["payload"]["tool_name"] == "web-search"
+    assert event["payload"]["input"] == {"query": "distributed RL"}
 
 
 def test_client_disconnect_cancels_incomplete_run() -> None:

@@ -2,6 +2,8 @@ export const SPECIALIST_TOOL_NAMES = new Set([
   'research-architect',
   'curriculum-architect',
   'chapter-writer',
+  'chapter-reviewer',
+  'html-diagram-author',
   'independent-verifier',
   'solution-comparator',
 ])

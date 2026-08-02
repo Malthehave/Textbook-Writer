@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from agents.run import RunConfig
+from agents.run import RunConfig, ToolExecutionConfig
 from agents.sandbox import Manifest, SandboxRunConfig
 from agents.sandbox.capabilities import Filesystem, LocalDirLazySkillSource, Shell, Skills
 from agents.sandbox.entries import LocalDir
@@ -65,7 +65,8 @@ def sandbox_tool_run_config(*, root: str | Path) -> RunConfig:
         sandbox=SandboxRunConfig(
             client=UnixLocalSandboxClient(),
             manifest=Manifest(root=str(Path(root))),
-        )
+        ),
+        tool_execution=ToolExecutionConfig(max_function_tool_concurrency=2),
     )
 
 

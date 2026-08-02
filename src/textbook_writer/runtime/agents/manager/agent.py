@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from agents import ModelSettings, RunHooks
+from agents import AgentToolStreamEvent, ModelSettings, RunHooks, WebSearchTool
 from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
 
@@ -38,6 +39,7 @@ def build_manager_agent(
     model: str = "gpt-5.6-luna",
     book_root: str | Path,
     hooks: RunHooks[Any] | None = None,
+    on_subagent_stream: Callable[[AgentToolStreamEvent], Any] | None = None,
 ) -> SandboxAgent[Any]:
     """Build the textbook manager bound to one chat's book directory."""
 
@@ -50,8 +52,10 @@ def build_manager_agent(
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="medium", summary="auto"),
             verbosity="low",
+            parallel_tool_calls=True,
         ),
         tools=[
+            WebSearchTool(),
             build_textbook_pdf_tool(root),
             validate_production_artifact_tool(root),
             build_research_architect_agent(model=model).as_tool(
@@ -64,6 +68,7 @@ def build_manager_agent(
                 max_turns=48,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
             build_curriculum_architect_agent(model=model).as_tool(
                 tool_name="curriculum-architect",
@@ -75,6 +80,7 @@ def build_manager_agent(
                 max_turns=32,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
             build_chapter_writer_agent(
                 model=model,
@@ -91,6 +97,7 @@ def build_manager_agent(
                 max_turns=64,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
             build_chapter_reviewer_agent(model=model).as_tool(
                 tool_name="chapter-reviewer",
@@ -105,6 +112,7 @@ def build_manager_agent(
                 max_turns=48,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
             build_independent_verifier_agent(model=model).as_tool(
                 tool_name="independent-verifier",
@@ -117,6 +125,7 @@ def build_manager_agent(
                 max_turns=48,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
             build_solution_comparator_agent(model=model).as_tool(
                 tool_name="solution-comparator",
@@ -130,6 +139,7 @@ def build_manager_agent(
                 max_turns=48,
                 run_config=run_config,
                 hooks=hooks,
+                on_stream=on_subagent_stream,
             ),
         ],
         capabilities=agent_capabilities(__file__),

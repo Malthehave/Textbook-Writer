@@ -1,11 +1,33 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LoaderCircleIcon } from 'lucide-react'
+import { MessageResponse } from '@/components/ai-elements/message'
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '@/components/ai-elements/reasoning'
 import { cn } from '@/lib/utils'
-import { specialistLabel } from '@/specialists'
+import { isSpecialistTool, specialistLabel } from '@/specialists'
 
 function formatPayload(value: unknown): string {
   if (value === undefined || value === null) return ''
   if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.length === 0) return ''
+  if (
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 0
+  ) {
+    return ''
+  }
+  if (
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    typeof (value as { input?: unknown }).input === 'string'
+  ) {
+    return (value as { input: string }).input
+  }
   try {
     return JSON.stringify(value, null, 2)
   } catch {
@@ -39,18 +61,115 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-function PayloadBlock({ label, text }: { label: string; text: string }) {
+function PayloadBlock({
+  label,
+  text,
+  scrollable = true,
+}: {
+  label: string
+  text: string
+  scrollable?: boolean
+}) {
   if (!text) return null
   return (
     <div className="min-w-0 space-y-1">
       <div className="text-xs font-medium tracking-wide text-mist uppercase">
         {label}
       </div>
-      <pre className="m-0 max-h-80 min-w-0 overflow-auto rounded-[var(--radius-sm)] bg-panel px-2.5 py-2 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-mist">
+      <pre
+        className={cn(
+          'm-0 min-w-0 rounded-[var(--radius-sm)] bg-panel px-2.5 py-2 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-mist',
+          scrollable && 'max-h-80 overflow-auto',
+        )}
+      >
         {text}
       </pre>
     </div>
   )
+}
+
+export type SubagentTranscriptEvent = {
+  outer_tool_call_id: string
+  agent_name: string
+  event_type:
+    | 'assistant-delta'
+    | 'reasoning-delta'
+    | 'tool-called'
+    | 'tool-output'
+  payload: {
+    text?: string
+    tool_call_id?: string
+    tool_name?: string
+    input?: unknown
+    output?: unknown
+  }
+}
+
+type TranscriptEntry =
+  | {
+      kind: 'message'
+      agentName: string
+      text: string
+    }
+  | {
+      kind: 'reasoning'
+      agentName: string
+      text: string
+    }
+  | {
+      kind: 'tool'
+      agentName: string
+      toolCallId: string
+      toolName: string
+      input?: unknown
+      output?: unknown
+    }
+
+function transcriptEntries(
+  events: SubagentTranscriptEvent[],
+): TranscriptEntry[] {
+  const entries: TranscriptEntry[] = []
+  const tools = new Map<string, Extract<TranscriptEntry, { kind: 'tool' }>>()
+  for (const event of events) {
+    if (
+      event.event_type === 'assistant-delta' ||
+      event.event_type === 'reasoning-delta'
+    ) {
+      const kind =
+        event.event_type === 'reasoning-delta' ? 'reasoning' : 'message'
+      const previous = entries.at(-1)
+      if (
+        previous &&
+        previous.kind === kind &&
+        previous.agentName === event.agent_name
+      ) {
+        previous.text += event.payload.text ?? ''
+      } else {
+        entries.push({
+          kind,
+          agentName: event.agent_name,
+          text: event.payload.text ?? '',
+        })
+      }
+      continue
+    }
+    const toolCallId = event.payload.tool_call_id ?? ''
+    if (event.event_type === 'tool-called') {
+      const entry: Extract<TranscriptEntry, { kind: 'tool' }> = {
+        kind: 'tool',
+        agentName: event.agent_name,
+        toolCallId,
+        toolName: event.payload.tool_name ?? 'tool',
+        input: event.payload.input,
+      }
+      entries.push(entry)
+      tools.set(toolCallId, entry)
+      continue
+    }
+    const tool = tools.get(toolCallId)
+    if (tool) tool.output = event.payload.output
+  }
+  return entries
 }
 
 export function TaskRow({
@@ -59,6 +178,7 @@ export function TaskRow({
   input,
   output,
   errorText,
+  transcript = [],
   defaultOpen = false,
 }: {
   toolName: string
@@ -66,6 +186,7 @@ export function TaskRow({
   input?: unknown
   output?: unknown
   errorText?: string
+  transcript?: SubagentTranscriptEvent[]
   defaultOpen?: boolean
 }) {
   const failed = state === 'output-error'
@@ -76,7 +197,14 @@ export function TaskRow({
   const inputText = formatPayload(input)
   const outputText = errorText?.trim() || formatPayload(output)
   const headerPreview = previewLine(errorText || output || input)
-  const [open, setOpen] = useState(defaultOpen || failed)
+  const [open, setOpen] = useState(
+    defaultOpen || failed || (running && isSpecialistTool(toolName)),
+  )
+  const entries = transcriptEntries(transcript)
+
+  useEffect(() => {
+    if (running && transcript.length > 0) setOpen(true)
+  }, [running, transcript.length])
 
   return (
     <div className="w-full min-w-0 max-w-full">
@@ -152,13 +280,55 @@ export function TaskRow({
       >
         <div className="min-h-0 min-w-0 overflow-hidden">
           <div className="mt-0.5 mb-1 ml-2 flex min-w-0 flex-col gap-2 border-l border-border py-1.5 pl-3.5">
-            {!inputText && !outputText ? (
+            {!inputText && !outputText && entries.length === 0 ? (
               <span className="text-xs text-mist">
                 {running ? 'Working…' : 'Completed'}
               </span>
             ) : (
               <>
-                <PayloadBlock label="Input" text={inputText} />
+                {entries.length > 0 ? (
+                  <div className="min-w-0 space-y-1.5">
+                    {entries.map((entry, index) => {
+                      if (entry.kind === 'reasoning') {
+                        return (
+                          <Reasoning
+                            key={`reasoning-${index}`}
+                            className="w-full"
+                            isStreaming={running && index === entries.length - 1}
+                          >
+                            <ReasoningTrigger />
+                            <ReasoningContent>{entry.text}</ReasoningContent>
+                          </Reasoning>
+                        )
+                      }
+                      if (entry.kind === 'message') {
+                        return (
+                          <MessageResponse key={`message-${index}`}>
+                            {entry.text}
+                          </MessageResponse>
+                        )
+                      }
+                      return (
+                        <TaskRow
+                          key={`tool-${entry.toolCallId || index}`}
+                          toolName={entry.toolName}
+                          state={
+                            entry.output === undefined
+                              ? 'input-available'
+                              : 'output-available'
+                          }
+                          input={entry.input}
+                          output={entry.output}
+                        />
+                      )
+                    })}
+                  </div>
+                ) : null}
+                <PayloadBlock
+                  label="Input"
+                  text={inputText}
+                  scrollable={false}
+                />
                 <PayloadBlock
                   label={failed || errorText ? 'Error' : 'Output'}
                   text={outputText}

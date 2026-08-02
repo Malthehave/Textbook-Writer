@@ -26,6 +26,7 @@ from textbook_writer.api.store import (
     read_debug_bundle,
 )
 from textbook_writer.api.stream import stream_agent_run
+from textbook_writer.api.subagent_events import normalize_subagent_event
 from textbook_writer.runtime.agents import (
     create_session_book,
     sandbox_tool_run_config,
@@ -107,12 +108,17 @@ async def _stream_session_run(
     *,
     cost_updates: asyncio.Queue[dict[str, Any]] | None = None,
     initial_cost: dict[str, Any] | None = None,
+    subagent_updates: asyncio.Queue[dict[str, Any]] | None = None,
 ) -> AsyncIterator[str]:
     try:
         async for chunk in stream_agent_run(
             result,
             cost_updates=cost_updates,
             initial_cost=initial_cost,
+            subagent_updates=subagent_updates,
+            persist_subagent_events=lambda events: store.append_subagent_events(
+                session_id, events
+            ),
         ):
             yield chunk
     finally:
@@ -167,7 +173,10 @@ async def session_messages(session_id: str) -> list[dict[str, Any]]:
     book_root = _book_root(session_id)
     session = _agent_session(row, book_root)
     items = await session.get_items()
-    return session_items_to_ui_messages([dict(item) for item in items])
+    return session_items_to_ui_messages(
+        [dict(item) for item in items],
+        subagent_events=store.list_subagent_events(session_id),
+    )
 
 
 @app.get("/api/sessions/{session_id}/debug")
@@ -204,6 +213,13 @@ def session_usage(session_id: str) -> dict[str, Any]:
         "by_model": summary["by_model"],
         "last_call": summary["calls"][-1] if summary["calls"] else None,
     }
+
+
+@app.get("/api/sessions/{session_id}/subagent-events")
+def session_subagent_events(session_id: str) -> list[dict[str, Any]]:
+    if store.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    return store.list_subagent_events(session_id)
 
 
 @app.get("/api/sessions/{session_id}/artifacts/content")
@@ -262,11 +278,22 @@ async def chat(body: ChatRequest) -> StreamingResponse:
     _claim_session_run(session_id)
 
     cost_updates: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    subagent_updates: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+    async def on_subagent_stream(event: Any) -> None:
+        normalized = normalize_subagent_event(event)
+        if normalized is not None:
+            await subagent_updates.put(normalized)
+
     try:
         book_root = _book_root(session_id)
         user_text = _last_user_text(body.messages)
         cost_hooks = BookCostHooks(book_root=book_root, updates=cost_updates)
-        agent = build_manager_agent(book_root=book_root, hooks=cost_hooks)
+        agent = build_manager_agent(
+            book_root=book_root,
+            hooks=cost_hooks,
+            on_subagent_stream=on_subagent_stream,
+        )
         session = _agent_session(row, book_root)
 
         if row.title == "Untitled book" and user_text:
@@ -293,6 +320,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
             session_id,
             cost_updates=cost_updates,
             initial_cost=cost_hooks.snapshot(),
+            subagent_updates=subagent_updates,
         ),
         media_type="text/event-stream",
         headers={

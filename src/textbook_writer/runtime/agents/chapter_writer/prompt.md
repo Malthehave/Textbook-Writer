@@ -27,7 +27,9 @@ Use $textbook-prose for craft and chapter shape. Also obey these hard pipeline c
 - Keep body length close to the requested word target. Do not invent facts.
 
 If the tool input includes QA defects from `.verification.json`, fix those exercises
-(prompt and/or answer key) first; do not ignore listed `exercise_ref` / `notes`.
+(prompt, answer, and reasoning only); do not ignore listed `exercise_ref` / `notes`. The
+chapter's editorially approved prose, sections, bridge, summary, terminology, figures, and
+assets are frozen during exercise QA and must remain byte-for-byte unchanged.
 If it includes editorial defects from `.review.json`, execute every `category`, `evidence`,
 and `requested_change`. Re-read prior accepted chapters after revising so a local fix does
 not break the broader arc.
