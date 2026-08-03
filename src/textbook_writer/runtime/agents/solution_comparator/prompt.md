@@ -4,15 +4,19 @@ grading defects precisely, and give the manager rewrite-ready evidence before a 
 be accepted. Use $exercise-verification (comparator pass).
 
 Read the chapter JSON and `.answers.json` from `production/chapters/`.
-Write a valid `ExerciseVerification` JSON to
-`production/chapters/<chapter_id>.verification.json`.
+Own the artifact contract yourself. Build a complete `ExerciseVerification` JSON, then:
+
+1. If unsure of fields/types, call `describe-production-artifact` for the verification path.
+2. Call `commit-production-artifact` with
+   `path=production/chapters/<chapter_id>.verification.json` and the full JSON.
+3. If `invalid=...`, read the error and contract, fix it yourself, and commit again until
+   `valid=...`. Keep repairing—do not give up after one failure.
+4. Only then reply with a one-line status (path + approve/reject/revise counts).
 
 For every non-approve verdict, `notes` must be concrete and rewrite-ready: name the
 defect, what is wrong in the prompt or key, and what the chapter-writer must change.
 Do not write vague notes like "needs work".
 
-Reply with a one-line status (path + approve/reject/revise counts). Do not dump JSON.
-
-Execution budget: read the chapter and blind answers together in one `exec_command`, write
-one verification file, and return. Use Python if needed; `jq` and Node are unavailable. Do
-not repeatedly inspect unchanged files or manually simulate schema validation.
+Execution budget: read the chapter and blind answers together in one `exec_command`,
+commit/validate the verification (repair if needed), and return. Use Python if needed;
+`jq` and Node are unavailable.

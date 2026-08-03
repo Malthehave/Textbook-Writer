@@ -46,6 +46,162 @@ def write_json(path: Path, payload: object) -> None:
     temporary.replace(path)
 
 
+def _resolved_production_path(workspace: Path, artifact_path: str) -> tuple[str, Path]:
+    relative = PurePosixPath(artifact_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("artifact path must be workspace-relative")
+    if not str(relative).startswith("production/"):
+        raise ValueError("artifact path must be under production/")
+    path = workspace.resolve() / Path(*relative.parts)
+    return str(relative), path
+
+
+def _model_for_artifact_path(artifact_path: str) -> type[BaseModel]:
+    relative = PurePosixPath(artifact_path)
+    if artifact_path == "production/research.json":
+        return Research
+    if artifact_path == "production/book-plan.json":
+        return ProductBookPlan
+    if artifact_path == "production/editorial-state.json":
+        return EditorialState
+    if relative.name.endswith(".answers.json"):
+        return BlindAnswers
+    if relative.name.endswith(".review.json"):
+        return ChapterReview
+    if relative.name.endswith(".verification.json"):
+        return ExerciseVerification
+    if relative.parent == PurePosixPath("production/chapters"):
+        return ProductChapter
+    raise ValueError(f"unsupported production artifact: {artifact_path}")
+
+
+def _schema_type_label(node: object) -> str:
+    if not isinstance(node, dict):
+        return "any"
+    if "$ref" in node:
+        return str(node["$ref"]).rsplit("/", 1)[-1]
+    if "anyOf" in node:
+        return " | ".join(_schema_type_label(option) for option in node["anyOf"])
+    if "type" in node:
+        type_name = node["type"]
+        if type_name == "array":
+            return f"array[{_schema_type_label(node.get('items', {}))}]"
+        if "pattern" in node:
+            return f"{type_name} matching {node['pattern']}"
+        return str(type_name)
+    return "object"
+
+
+def artifact_contract_help(artifact_path: str) -> str:
+    """Compact required-field contract for specialist repair loops."""
+
+    model = _model_for_artifact_path(artifact_path)
+    schema = model.model_json_schema()
+    properties = schema.get("properties", {})
+    required = schema.get("required", list(properties))
+    lines = [f"schema={model.__name__}", "required fields:"]
+    for name in required:
+        lines.append(f"- {name}: {_schema_type_label(properties.get(name, {}))}")
+    if model is Research:
+        lines.append(
+            "notes: audience/learning_goal are plain strings; no extra keys; "
+            "topic source_refs are source_ids (not URLs); ≥2 hosts/topic."
+        )
+    elif model is ProductChapter:
+        lines.append(
+            "notes: exercise count and learning_outcomes must match book-plan.json; "
+            "planned visual id must appear in figures[] when the plan has a visual."
+        )
+    elif model is BlindAnswers:
+        lines.append(
+            "notes: answers[].exercise_ref must cover every exercise in the chapter exactly once."
+        )
+    elif model is ExerciseVerification:
+        lines.append(
+            "notes: verdicts[].exercise_ref must cover every exercise in the chapter exactly once."
+        )
+    return "\n".join(lines)
+
+
+def _invalid_artifact_message(path: str, error: object) -> str:
+    try:
+        contract = artifact_contract_help(path)
+    except Exception:
+        contract = "schema=unknown"
+    return f"invalid={path} error={error}\n{contract}"
+
+
+def commit_production_artifact_tool(book_root: Path) -> FunctionTool:
+    """Write + validate a production JSON artifact for specialist self-repair loops."""
+
+    workspace = Path(book_root)
+
+    @function_tool(name_override="commit-production-artifact")
+    def commit_production_artifact(path: str, content: str) -> str:
+        """Write one canonical production JSON file and validate it immediately.
+
+        Use this for research, book-plan, chapter, review, answers, and verification
+        artifacts. `path` is workspace-relative (e.g. production/research.json).
+        `content` is the full JSON document as a string.
+
+        Returns `valid=<path> schema=<Name>` on success.
+        Returns `invalid=<path> error=<message>` plus the required-field contract on
+        failure — fix the JSON and call again until valid. Do not finish until valid.
+        """
+
+        try:
+            rel, dest = _resolved_production_path(workspace, path)
+        except ValueError as exc:
+            return _invalid_artifact_message(path, exc)
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            return _invalid_artifact_message(path, f"JSON parse error: {exc}")
+        if not isinstance(payload, dict):
+            return _invalid_artifact_message(path, "top-level JSON value must be an object")
+        write_json(dest, payload)
+        try:
+            model_name = _validate_production_artifact(workspace, rel)
+        except Exception as exc:
+            return _invalid_artifact_message(rel, exc)
+        return f"valid={rel} schema={model_name}"
+
+    return commit_production_artifact
+
+
+def describe_production_artifact_tool(book_root: Path) -> FunctionTool:
+    """Return the canonical schema contract for a production artifact path."""
+
+    del book_root  # path-only helper; kept for uniform tool wiring
+
+    @function_tool(name_override="describe-production-artifact")
+    def describe_production_artifact(path: str) -> str:
+        """Return the required JSON contract for a production artifact path.
+
+        Call this before writing if you are unsure of field names/types. Examples:
+        production/research.json, production/book-plan.json,
+        production/chapters/ch01.json, production/chapters/ch01.review.json,
+        production/chapters/ch01.answers.json, production/chapters/ch01.verification.json.
+        """
+
+        try:
+            return artifact_contract_help(path)
+        except Exception as exc:
+            return f"unsupported={path} error={exc}"
+
+    return describe_production_artifact
+
+
+def production_artifact_tools(book_root: Path) -> list[FunctionTool]:
+    """Describe + commit + validate tools so specialists can self-repair before returning."""
+
+    return [
+        describe_production_artifact_tool(book_root),
+        commit_production_artifact_tool(book_root),
+        validate_production_artifact_tool(book_root),
+    ]
+
+
 def _assemble_book(workspace: Path) -> ProductBook:
     stages = stages_dir(workspace)
     research = Research.model_validate_json(
@@ -158,23 +314,7 @@ def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
     if not path.is_file():
         raise FileNotFoundError(f"artifact missing at {artifact_path}")
 
-    if artifact_path == "production/research.json":
-        model: type[BaseModel] = Research
-    elif artifact_path == "production/book-plan.json":
-        model = ProductBookPlan
-    elif artifact_path == "production/editorial-state.json":
-        model = EditorialState
-    elif path.name.endswith(".answers.json"):
-        model = BlindAnswers
-    elif path.name.endswith(".review.json"):
-        model = ChapterReview
-    elif path.name.endswith(".verification.json"):
-        model = ExerciseVerification
-    elif relative.parent == PurePosixPath("production/chapters"):
-        model = ProductChapter
-    else:
-        raise ValueError(f"unsupported production artifact: {artifact_path}")
-
+    model = _model_for_artifact_path(artifact_path)
     validated = model.model_validate_json(path.read_text(encoding="utf-8"))
     if isinstance(validated, ProductChapter):
         _validate_figure_assets(workspace, validated)
@@ -216,15 +356,20 @@ def validate_production_artifact_tool(book_root: Path) -> FunctionTool:
 
     @function_tool(name_override="validate-production-artifact")
     def validate_production_artifact(path: str) -> str:
-        """Validate one newly written production artifact against its canonical schema.
+        """Validate one production JSON artifact already on disk.
 
-        Call immediately after its producing specialist returns. Supports research, plan,
-        editorial state, chapter, blind answers, chapter review, and exercise verification
-        JSON.
+        Returns `valid=<path> schema=<Name>` or `invalid=<path> error=<message>`.
+        Specialists must fix invalid artifacts themselves (usually via
+        `commit-production-artifact`) before finishing. Managers use this as a gate after
+        a specialist returns.
         """
 
-        model_name = _validate_production_artifact(workspace, path)
-        return f"valid={path} schema={model_name}"
+        try:
+            rel, _dest = _resolved_production_path(workspace, path)
+            model_name = _validate_production_artifact(workspace, rel)
+        except Exception as exc:
+            return _invalid_artifact_message(path, exc)
+        return f"valid={rel} schema={model_name}"
 
     return validate_production_artifact
 

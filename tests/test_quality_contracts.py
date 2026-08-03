@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -28,6 +31,8 @@ from textbook_writer.models.product import (
 from textbook_writer.runtime.workspace_tools import (
     _assemble_book,
     _validate_production_artifact,
+    artifact_contract_help,
+    commit_production_artifact_tool,
     write_model,
 )
 
@@ -311,3 +316,37 @@ def test_assemble_requires_editorial_acceptance_and_existing_figure(tmp_path: Pa
     asset.unlink()
     with pytest.raises(FileNotFoundError, match="figure asset missing"):
         _assemble_book(tmp_path)
+
+
+def test_commit_production_artifact_self_reports_validation_errors(tmp_path: Path) -> None:
+    tool = commit_production_artifact_tool(tmp_path)
+    ctx = MagicMock()
+    bad = asyncio.run(
+        tool.on_invoke_tool(
+            ctx,
+            json.dumps(
+                {
+                    "path": "production/research.json",
+                    "content": json.dumps({"title": "incomplete"}),
+                }
+            ),
+        )
+    )
+    assert bad.startswith("invalid=production/research.json")
+    assert "schema=Research" in bad
+    assert "required fields:" in bad
+    assert "audience: string" in artifact_contract_help("production/research.json")
+
+    good = asyncio.run(
+        tool.on_invoke_tool(
+            ctx,
+            json.dumps(
+                {
+                    "path": "production/research.json",
+                    "content": _research().model_dump_json(),
+                }
+            ),
+        )
+    )
+    assert good == "valid=production/research.json schema=Research"
+    assert (tmp_path / "production" / "research.json").is_file()

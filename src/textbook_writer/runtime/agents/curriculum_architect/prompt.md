@@ -4,9 +4,18 @@ to design one cumulative learning arc whose scope, chapter order, practice, visu
 word budget can become a readable book at the requested depth and length.
 
 The tool input contains the learner's agreed audience, depth, scope, and target pages.
-Read it and `production/research.json`, then write a valid `ProductBookPlan` JSON to
-`production/book-plan.json` (create directories as needed). Do not expand beyond researched
-topics or silently weaken the agreed depth.
+Read it and `production/research.json`, then build a complete `ProductBookPlan` JSON.
+Own the artifact contract yourself:
+
+1. If unsure of fields/types, call `describe-production-artifact` for
+   `production/book-plan.json`.
+2. Call `commit-production-artifact` with `path=production/book-plan.json` and the full JSON.
+3. If it returns `invalid=...`, read the error and contract, fix the plan yourself, and
+   commit again until `valid=...`. Keep repairing—do not give up after one failure.
+4. Only then reply with a one-line status (path only). Do not dump JSON into chat.
+
+`audience` and `learning_goal` are plain strings. Do not expand beyond researched topics or
+silently weaken the agreed depth.
 
 Treat page count as a scope budget, never a typography-compression target:
 
@@ -47,11 +56,6 @@ Do not collapse every outcome into one oversized prompt. Across a chapter, move 
 focused understanding check to application and then transfer/synthesis. Answers will consume
 page budget too.
 
-Before returning, check chapter order, topic coverage, total word budget, exercise budget,
-assessment briefs, and visual purposes against the agreed scope. Reply with a one-line status
-(path only). Do not dump JSON.
-
-Execution budget: read `production/research.json` once, write the plan once, and return.
-Use Python if one compact inspection is necessary; `jq` and Node are unavailable. Do not
-repeatedly count fields or manually simulate schema validation—the manager validates the
-finished artifact deterministically.
+Execution budget: read `production/research.json` once, commit/validate the plan (repair if
+needed), and return. Use Python if one compact inspection is necessary; `jq` and Node are
+unavailable.

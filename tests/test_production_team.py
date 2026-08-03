@@ -19,6 +19,13 @@ from textbook_writer.runtime.agents.manager import build_manager_agent as build_
 from textbook_writer.runtime.agents import agent_capabilities
 
 
+def _tool_names(agent: SandboxAgent) -> set[str]:
+    return {
+        getattr(tool, "name", None) or getattr(tool, "tool_name", None)
+        for tool in agent.tools or []
+    }
+
+
 def test_production_entry_is_manager_agent() -> None:
     assert callable(build_manager_agent)
 
@@ -27,13 +34,13 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     book = tmp_path / "book"
     book.mkdir()
     manager = build_manager(model="gpt-5.6-luna", book_root=book)
-    research = build_research_architect_agent(model="gpt-5.6-luna")
-    curriculum = build_curriculum_architect_agent(model="gpt-5.6-luna")
+    research = build_research_architect_agent(model="gpt-5.6-luna", book_root=book)
+    curriculum = build_curriculum_architect_agent(model="gpt-5.6-luna", book_root=book)
     writer = build_chapter_writer_agent(model="gpt-5.6-luna", book_root=book)
-    reviewer = build_chapter_reviewer_agent(model="gpt-5.6-luna")
+    reviewer = build_chapter_reviewer_agent(model="gpt-5.6-luna", book_root=book)
     visual = build_html_diagram_agent(model="gpt-5.6-luna", book_root=book)
-    verifier = build_independent_verifier_agent(model="gpt-5.6-luna")
-    comparator = build_solution_comparator_agent(model="gpt-5.6-luna")
+    verifier = build_independent_verifier_agent(model="gpt-5.6-luna", book_root=book)
+    comparator = build_solution_comparator_agent(model="gpt-5.6-luna", book_root=book)
 
     assert _skill_names(manager) == {"manager-orchestration"}
     assert _skill_names(research) == {"research"}
@@ -54,19 +61,30 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     ):
         assert specialist.model_settings.reasoning is not None
         assert specialist.model_settings.reasoning.summary == "auto"
+        assert specialist.output_type is None
 
-    writer_tools = {
-        getattr(tool, "name", None) or getattr(tool, "tool_name", None)
-        for tool in writer.tools or []
+    assert _tool_names(writer) == {
+        "describe-production-artifact",
+        "commit-production-artifact",
+        "validate-production-artifact",
+        "html-diagram-author",
     }
-    assert writer_tools == {"html-diagram-author"}
-    manager_tools = {
-        getattr(tool, "name", None) or getattr(tool, "tool_name", None)
-        for tool in manager.tools or []
+    assert _tool_names(research) == {
+        "web_search",
+        "describe-production-artifact",
+        "commit-production-artifact",
+        "validate-production-artifact",
     }
+    assert {
+        "describe-production-artifact",
+        "commit-production-artifact",
+        "validate-production-artifact",
+    } <= _tool_names(curriculum)
+    manager_tools = _tool_names(manager)
     assert "html-diagram-author" not in manager_tools
     assert "chapter-writer" in manager_tools
     assert "chapter-reviewer" in manager_tools
+    assert "commit-production-artifact" not in manager_tools
 
     prose = (
         Path(__file__).resolve().parents[1]
@@ -81,11 +99,13 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert "Never create or edit `.answers.json`" in writer.instructions
     assert "publication-fit length revision" in writer.instructions
     assert "do not call the" in writer.instructions
+    assert "commit-production-artifact" in writer.instructions
     assert "Do not estimate final PDF page usage" in reviewer.instructions
     assert "only authority for page count" in reviewer.instructions
     assert "optional polish" in reviewer.instructions
     assert "at most one corrective rasterization" in visual.instructions
-    assert "Write exactly that `BlindAnswers` shape" in verifier.instructions
+    assert "BlindAnswers" in verifier.instructions
+    assert "commit-production-artifact" in verifier.instructions
 
 
 def test_agent_capabilities_shell_filesystem_and_optional_skills() -> None:

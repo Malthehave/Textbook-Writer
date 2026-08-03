@@ -64,26 +64,28 @@ def build_manager_agent(
             WebSearchTool(),
             build_textbook_pdf_tool(root),
             validate_production_artifact_tool(root),
-            build_research_architect_agent(model=model).as_tool(
+            build_research_architect_agent(model=model, book_root=root).as_tool(
                 tool_name="research-architect",
                 tool_description=(
                     "Build/revise production/research.json via web search. "
+                    "The specialist commits and self-validates before returning. "
                     "source_refs must be source_ids, never URLs; ≥2 hosts/topic. "
-                    "Follow $research. Returns a short status only."
+                    "Follow $research. Returns a short status / path."
                 ),
-                max_turns=24,
+                max_turns=32,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
             ),
-            build_curriculum_architect_agent(model=model).as_tool(
+            build_curriculum_architect_agent(model=model, book_root=root).as_tool(
                 tool_name="curriculum-architect",
                 tool_description=(
                     "Read production/research.json and write a page-budgeted "
-                    "production/book-plan.json. In input, pass the agreed audience, depth, "
-                    "scope, target pages, and exercise expectations. Returns a short status only."
+                    "production/book-plan.json. The specialist commits and self-validates "
+                    "before returning. In input, pass the agreed audience, depth, scope, "
+                    "target pages, and exercise expectations. Returns a short status / path."
                 ),
-                max_turns=12,
+                max_turns=20,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
@@ -97,52 +99,54 @@ def build_manager_agent(
                 tool_description=(
                     "Write or revise production/chapters/<chapter_id>.json from plan slice "
                     "+ research sources, including figures via its own diagram specialist. "
-                    "On QA rewrite, put every non-approve exercise_ref and notes from "
-                    "verification.json into the tool input. Returns a short status only."
+                    "The specialist commits a full chapter, self-validates (including "
+                    "exercise count vs plan), and only then returns. On QA rewrite, put "
+                    "every non-approve exercise_ref and notes from verification.json into "
+                    "the tool input. Returns a short status / path."
                 ),
-                max_turns=24,
+                max_turns=40,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
             ),
-            build_chapter_reviewer_agent(model=model).as_tool(
+            build_chapter_reviewer_agent(model=model, book_root=root).as_tool(
                 tool_name="chapter-reviewer",
                 tool_description=(
                     "Independently review one chapter against the full plan, editorial "
                     "state, and prior accepted chapters; write "
-                    "production/chapters/<chapter_id>.review.json. Pass the chapter id and "
-                    "whether this is an initial review or rewrite in input. After this tool, "
-                    "you MUST open the review JSON and apply the editorial gate. "
-                    "Returns a short status only."
+                    "production/chapters/<chapter_id>.review.json after self-validating. "
+                    "Pass the chapter id and whether this is an initial review or rewrite "
+                    "in input. After this tool, you MUST open the review JSON and apply "
+                    "the editorial gate. Returns a short status / path."
                 ),
-                max_turns=12,
+                max_turns=20,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
             ),
-            build_independent_verifier_agent(model=model).as_tool(
+            build_independent_verifier_agent(model=model, book_root=root).as_tool(
                 tool_name="independent-verifier",
                 tool_description=(
                     "Solve exercises without draft answers; write "
-                    "production/chapters/<chapter_id>.answers.json. "
+                    "production/chapters/<chapter_id>.answers.json after self-validating. "
                     "Pass answer-free exercises only. Re-run after every chapter rewrite. "
-                    "Returns a short status only."
+                    "Returns a short status / path."
                 ),
-                max_turns=12,
+                max_turns=20,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,
             ),
-            build_solution_comparator_agent(model=model).as_tool(
+            build_solution_comparator_agent(model=model, book_root=root).as_tool(
                 tool_name="solution-comparator",
                 tool_description=(
                     "Compare answers on disk to the draft key; write "
-                    "production/chapters/<chapter_id>.verification.json with concrete "
-                    "notes per exercise. After this tool, you MUST open that JSON and apply "
-                    "the exercise QA gate before the next chapter or publish. "
-                    "Returns a short status only."
+                    "production/chapters/<chapter_id>.verification.json after "
+                    "self-validating, with concrete notes per exercise. After this tool, "
+                    "you MUST open that JSON and apply the exercise QA gate before the "
+                    "next chapter or publish. Returns a short status / path."
                 ),
-                max_turns=12,
+                max_turns=20,
                 run_config=run_config,
                 hooks=hooks,
                 on_stream=on_subagent_stream,

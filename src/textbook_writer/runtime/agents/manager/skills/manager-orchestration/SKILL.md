@@ -48,11 +48,12 @@ not grade their own exercises).
 | `build/<slug>.pdf` | Measured PDF |
 
 Before re-running a stage, `ls production/`. Resume from disk when a good artifact exists.
-After any specialist writes a canonical JSON artifact, call
-`validate-production-artifact` on that path before advancing. A validation failure belongs
-to that producing stage: give the exact error back to the same specialist and validate its
-single focused correction. If the correction remains invalid, stop and report the contract
-failure rather than looping. Never defer schema or figure-path validation until publication.
+Specialist JSON producers own format: they use `commit-production-artifact` /
+`validate-production-artifact` and must self-repair until valid before returning. After a
+specialist returns, call `validate-production-artifact` once as a gate. Advance only on
+`valid=...`. On `invalid=...`, re-invoke that same specialist with the exact error in tool
+input—do not edit production JSON yourself. Never defer schema or figure-path validation
+until publication.
 
 ## Phase order (mandatory)
 
@@ -121,9 +122,7 @@ If the decision is `revise`, do not invoke the blind solver. Call `chapter-write
 chapter id and instruct it to read the existing chapter JSON and its `.review.json` from the
 shared filesystem, revise the chapter in place, and preserve everything unaffected by the
 notes. The review file is the canonical brief. Re-run the reviewer, then reopen the review.
-For targets of 8 pages or fewer, allow one editorial rewrite after
-the initial draft; for longer books, allow at most two. If it still does not approve, stop
-and report the unresolved notes.
+Repeat until `approve`. Do not stop after a failed rewrite.
 
 If the decision is `approve`, freeze prose and figures. Immediately update editorial state:
 
@@ -145,11 +144,8 @@ on frozen editorial content.
    frozen prose, sections, figures, terminology, and bridges must remain unchanged.
 3. Re-run `independent-verifier` (fresh answers file).
 4. Re-run `solution-comparator`.
-5. Re-open `.verification.json`. Repeat the gate.
-
-**Cap:** for targets of 8 pages or fewer, allow one exercise rewrite after the first compare.
-For longer books, allow at most two. If still not all-`approve`, stop and tell the learner
-which exercises failed and why (quote `notes`) — do not publish broken exercises.
+5. Re-open `.verification.json`. Repeat the gate until every verdict is `approve`.
+   Do not stop because a previous rewrite failed, and do not publish broken exercises.
 
 #### If every verdict is `approve`
 Chapter is QA-clear. Continue reviewing the next draft or publish when every planned chapter
@@ -177,10 +173,10 @@ If the measured result is outside the range:
 4. Re-run editorial review and blind exercise QA for every changed chapter, update
    editorial state, and compile again.
 
-For targets of 8 pages or fewer, allow one publication-fit correction cycle; for longer
-books, allow at most two. If the PDF still falls outside the range, stop revising, give the
-learner the latest PDF, and report its measured page count and deviation honestly. Never
-withhold an already compiled PDF solely because it missed the target.
+Keep making targeted fit corrections and recompiling until the measured result is inside
+tolerance. Always leave the learner the latest compiled PDF, and report measured page count
+honestly while you continue. Never withhold an already compiled PDF solely because it missed
+the target.
 
 Do not estimate page consumption from PNG pixels, HTML dimensions, word-count arithmetic,
 or a reviewer's visual guess. Only the measured publication report determines page fit.

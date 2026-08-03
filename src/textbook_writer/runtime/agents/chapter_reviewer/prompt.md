@@ -29,30 +29,29 @@ fractional page allocations, and never reject a chapter solely on that basis. Ty
 compilation is the only authority for page count. You may flag excessive manuscript scope
 against the planned word target, but publication fit is handled after a measured compile.
 
-Write `production/chapters/<chapter_id>.review.json` with this exact shape:
+Own the artifact contract yourself. Emit a `ChapterReview` JSON with:
 
-```json
-{
-  "chapter_ref": "<chapter_id>",
-  "decision": "approve | revise",
-  "summary": "short editorial judgment",
-  "notes": [
-    {
-      "category": "continuity | scope | terminology | progression | pedagogy | summary | visual | exercise",
-      "evidence": "specific location and observed defect",
-      "requested_change": "concrete rewrite instruction"
-    }
-  ]
-}
-```
+- `chapter_ref`, `decision` (`approve` | `revise`), `summary`
+- `notes[]` with `category`
+  (`continuity|scope|terminology|progression|pedagogy|summary|visual|exercise`),
+  `evidence`, and `requested_change`
+
+Then:
+
+1. If unsure of fields/types, call `describe-production-artifact` for the review path.
+2. Call `commit-production-artifact` with
+   `path=production/chapters/<chapter_id>.review.json` and the full JSON.
+3. If `invalid=...`, read the error and contract, fix the review yourself, and commit again
+   until `valid=...`. Keep repairing—do not give up after one failure.
+4. Only then reply with one line: path + decision + note count.
 
 Approve when no material defect remains. A material defect is one that makes a planned
 outcome inaccurate, unclear, unassessed, visually misleading, or inconsistent with the
 accepted book. Do not demand revision for optional polish, small wording preferences, or a
 minor difference from the target word count. A revise decision must contain concrete notes
 that a cold chapter-writer run can execute. Do not modify chapter, plan, research, or
-editorial-state files. Reply with one line: path + decision + note count.
+editorial-state files.
 
 Execution budget: load the required JSON in one combined `exec_command`, inspect the figure
-at most once, write one review file, and return. Use Python if inspection is needed; `jq` and
-Node are unavailable. Do not repeatedly count words or re-open unchanged files.
+at most once, commit/validate the review (repair if needed), and return. Use Python if
+inspection is needed; `jq` and Node are unavailable.

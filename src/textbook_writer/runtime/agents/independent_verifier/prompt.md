@@ -5,13 +5,20 @@ proposed key. Use $exercise-verification (solver pass).
 
 Use only the supplied question, answer-free chapter study material, and approved research.
 
-Write answers JSON to `production/chapters/<chapter_id>.answers.json` with shape:
+Own the artifact contract yourself. Build a `BlindAnswers` JSON:
+
 `{ "chapter_ref": "...", "answers": [ { "exercise_ref", "answer", "reasoning",
 "ambiguity": "none|minor|material", "source_refs": [] } ] }`.
-Reply with a one-line status (path + answer count). Do not dump JSON.
 
-Write exactly that `BlindAnswers` shape—never copy the chapter or add chapter prose fields.
-Read the chapter and relevant research once, write the answers file once, and return. Use at
-most two `exec_command` calls and use Python if needed; `jq` and Node are unavailable. Do not
-manually validate or repeatedly re-open the file after writing because the manager performs
-deterministic schema and exercise-coverage validation.
+Then:
+
+1. If unsure of fields/types, call `describe-production-artifact` for the answers path.
+2. Call `commit-production-artifact` with
+   `path=production/chapters/<chapter_id>.answers.json` and the full JSON.
+3. If `invalid=...`, read the error and contract, fix it yourself, and commit again until
+   `valid=...`. Keep repairing—do not give up after one failure.
+4. Only then reply with a one-line status (path + answer count). Do not dump JSON.
+
+Never copy the chapter or add chapter prose fields. Read the chapter and relevant research
+once, commit/validate (repair if needed), and return. Use at most two `exec_command` calls
+and use Python if needed; `jq` and Node are unavailable.

@@ -71,9 +71,9 @@ Prefer `docker compose logs api` for live runs.
    Never run two chapter writers concurrently. Tool concurrency is capped at two.
 5. `build-textbook-pdf` → assemble `book.json` + Typst PDF and write
    `production/publication-report.json`. Accept the requested page target within an
-   inclusive ±15% measured tolerance (whole-page bounds round outward). If outside, make
-   at most two targeted scope revisions, re-run gates for changed chapters, and compile
-   again; never withhold the latest compiled PDF solely because fit still misses.
+   inclusive ±15% measured tolerance (whole-page bounds round outward). If outside, revise
+   scope, re-run gates for changed chapters, and compile again until fit is accepted; never
+   withhold the latest compiled PDF solely because fit still misses.
 
 Manager tools: `build-textbook-pdf`, research-architect, curriculum-architect, chapter-writer,
 chapter-reviewer, independent-verifier, solution-comparator, and
@@ -87,10 +87,14 @@ and 1 visual; 7–8 page plans are capped at 2 chapters, 6 exercises, and 2 visu
 Web discovery uses hosted `WebSearchTool` on the research architect only.
 
 Specialists are `Agent.as_tool()` calls: each invocation is a **fresh nested run** with the
-tool’s `input` string as the user message (no prior specialist chat history). Shared
-memory is that chat’s book directory plus whatever brief the manager puts in `input`.
-Only one manager run may be active per chat so overlapping requests cannot race on those
-shared files.
+tool’s `input` string as the user message (no prior specialist chat history). JSON producers
+own format: they can `describe-production-artifact` for the required contract, write via
+`commit-production-artifact`, read `invalid=` errors (with schema help), and self-repair
+until `valid=` before returning. The manager gates with `validate-production-artifact` and
+keeps re-invoking specialists on failure—it does not edit schemas and must not abandon a
+chapter/book after one failed rewrite. Shared memory is that chat’s book directory plus
+whatever brief the manager puts in `input`. Only one manager run may be active per chat so
+overlapping requests cannot race on those shared files.
 
 Nested specialist streams are captured through `Agent.as_tool(on_stream=...)`. Visible
 assistant text, reasoning summaries, and nested tool calls/results are streamed into the
