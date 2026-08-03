@@ -335,7 +335,11 @@ def test_commit_production_artifact_self_reports_validation_errors(tmp_path: Pat
     assert bad.startswith("invalid=production/research.json")
     assert "schema=Research" in bad
     assert "required fields:" in bad
-    assert "audience: string" in artifact_contract_help("production/research.json")
+    research_help = artifact_contract_help("production/research.json")
+    assert "audience: string" in research_help
+    assert "Working title for the eventual textbook" in research_help
+    plan_help = artifact_contract_help("production/book-plan.json")
+    assert "Published book title for the cover" in plan_help
 
     good = asyncio.run(
         tool.on_invoke_tool(

@@ -40,12 +40,18 @@
 #let title-page(title, purpose) = [
   #set align(center)
   #set par(justify: false)
+  // Equal fractional space above/below centers the block; slight bias up via larger
+  // bottom fr so the title does not sit optically low on the page.
   #v(1fr)
   #text(font: "Avenir Next", size: 10pt, weight: "semibold", fill: accent, tracking: 1.4pt)[TEXTBOOK WRITER]
   #v(16pt)
   #text(font: "Avenir Next", size: 30pt, weight: "semibold", fill: ink)[#title]
   #v(12pt)
-  #block(width: 78%)[#text(size: 13pt, fill: muted)[#purpose]]
+  #block(width: 78%)[
+    #set align(center)
+    #text(size: 13pt, fill: muted)[#purpose]
+  ]
+  #v(1.15fr)
 ]
 
 #let objective-box(items) = block(

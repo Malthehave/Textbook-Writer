@@ -41,7 +41,13 @@ class Research(Model):
     """Sources + topics written by the research architect."""
 
     research_id: str
-    title: str = Field(min_length=1)
+    title: str = Field(
+        min_length=1,
+        description=(
+            "Working title for the eventual textbook: specific to the subject and "
+            "learner goal; used as the seed for the published book title."
+        ),
+    )
     audience: str = Field(min_length=1)
     learning_goal: str = Field(min_length=1)
     sources: list[ProductSource] = Field(min_length=1)
@@ -111,7 +117,13 @@ class PlannedChapter(Model):
 
 class ProductBookPlan(Model):
     plan_id: str
-    title: str = Field(min_length=1)
+    title: str = Field(
+        min_length=1,
+        description=(
+            "Published book title for the cover, table of contents, and PDF filename. "
+            "Must name the subject for the learner; never a tool/status/reply string."
+        ),
+    )
     audience: str = Field(min_length=1)
     learning_goal: str = Field(min_length=1)
     target_pages: int = Field(ge=1)

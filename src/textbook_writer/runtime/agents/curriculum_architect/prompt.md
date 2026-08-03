@@ -13,9 +13,12 @@ Own the artifact contract yourself:
 3. If it returns `invalid=...`, read the error and contract, fix the plan yourself, and
    commit again until `valid=...`. Keep repairing—do not give up after one failure.
 4. Only then reply with a one-line status (path only). Do not dump JSON into chat.
+   The chat reply is not part of the artifact — never copy reply text into JSON fields.
 
-`audience` and `learning_goal` are plain strings. Do not expand beyond researched topics or
-silently weaken the agreed depth.
+Author `title` as the published book title (cover + PDF). Start from
+`production/research.json`'s `title`, then refine it into a clear, specific name for this
+book's subject and arc. Keep `audience` and `learning_goal` as plain strings. Do not expand
+beyond researched topics or silently weaken the agreed depth.
 
 Treat page count as a scope budget, never a typography-compression target:
 

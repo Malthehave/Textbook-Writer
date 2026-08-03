@@ -15,8 +15,10 @@ Own the artifact contract yourself:
    commit again until `valid=...`. Keep repairing—do not give up after one failure.
 5. Only then reply with a one-line status (path only). Do not dump JSON into chat.
 
-`audience` and `learning_goal` are plain strings—not objects. Never add extra keys such as
-`schema_version` or `kind`.
+Set `title` to a working textbook title for this subject and learner goal — specific enough
+to become the published cover title later. `audience` and `learning_goal` are plain
+strings—not objects. Never add extra keys such as `schema_version` or `kind`. The chat
+reply is not part of the artifact — never copy reply text into JSON fields.
 
 Execution budget: search each needed evidence lane once, open only the strongest results,
 commit/validate (and repair if needed), then return. Use at most two shell inspections when

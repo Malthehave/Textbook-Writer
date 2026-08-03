@@ -101,7 +101,11 @@ def artifact_contract_help(artifact_path: str) -> str:
     required = schema.get("required", list(properties))
     lines = [f"schema={model.__name__}", "required fields:"]
     for name in required:
-        lines.append(f"- {name}: {_schema_type_label(properties.get(name, {}))}")
+        prop = properties.get(name, {})
+        line = f"- {name}: {_schema_type_label(prop)}"
+        if isinstance(prop, dict) and prop.get("description"):
+            line = f"{line} — {prop['description']}"
+        lines.append(line)
     if model is Research:
         lines.append(
             "notes: audience/learning_goal are plain strings; no extra keys; "

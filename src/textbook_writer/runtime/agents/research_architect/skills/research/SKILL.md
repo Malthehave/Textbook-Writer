@@ -17,7 +17,7 @@ Call `describe-production-artifact` if you need the field contract. Persist only
 Top-level fields only:
 
 - `research_id` (string)
-- `title` (string)
+- `title` (string — working textbook title for the subject/goal; seeds the published title)
 - `audience` (string — not an object)
 - `learning_goal` (string)
 - `sources` (array of ProductSource)

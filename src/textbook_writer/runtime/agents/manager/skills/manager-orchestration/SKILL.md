@@ -79,11 +79,12 @@ The architect owns finding real sources. Validate `production/research.json`.
 
 ### C — Curriculum
 `curriculum-architect` → `book-plan.json` (include `target_pages` from the agreed
-scope). Inspect chapter order, total target words, exercise counts/assessment briefs, and
-visual purposes before accepting it. If the plan is weak, edit the JSON or re-run the
-architect with a short fix brief—no separate auditor/repair agents.
-Validate `production/book-plan.json` before creating editorial state, then validate
-`production/editorial-state.json`.
+scope). The plan `title` is the published book title (cover/PDF) — it should name the
+subject clearly, usually refined from `research.json`'s title. Inspect title, chapter
+order, total target words, exercise counts/assessment briefs, and visual purposes before
+accepting it. If the plan is weak, re-run the architect with a short fix brief—do not edit
+JSON yourself. Validate `production/book-plan.json` before creating editorial state, then
+validate `production/editorial-state.json`.
 
 Create `production/editorial-state.json` after accepting the plan:
 

@@ -138,3 +138,6 @@ def test_textbook_template_numbers_and_centers_display_equations() -> None:
     assert "size: 10.75pt" in template
     assert "leading: 0.82em, spacing: 1.4em" in template
     assert "above: 1.65em, below: 0.85em" in template
+    title_page = template.split("#let title-page")[1].split("#let objective-box")[0]
+    assert title_page.index("#v(1fr)") < title_page.index("[#title]")
+    assert title_page.rindex("#v(1.15fr)") > title_page.index("[#purpose]")
