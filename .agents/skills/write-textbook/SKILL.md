@@ -11,9 +11,13 @@ local artifacts. No API key, Agents SDK, or replacement model-calling script is 
 
 Read [artifact contracts](references/artifacts.md) before authoring files and
 [teaching guidance](references/teaching.md) for planning, writing and reader review.
+Read [discovery and personalization](references/discovery.md) when starting a new book.
 
-1. Agree audience, starting knowledge, desired capability, scope, length and solution
-   mode from the conversation. Do not ask again for already provided information.
+1. Load the local learner profile if present and interpret the request as an expression
+   of curiosity. Discover the intended capability and missing context with a short adaptive
+   interview. Recommend scope, depth and length rather than making the learner design a
+   curriculum. A short prompt does not imply a short book. Confirm the learning promise
+   and record concrete personalization decisions; do not re-ask answered questions.
 2. Run `uv run textbook init --book output/books/<unique-id>` and record brief.json.
 3. Delegate primary-source research. Require opened sources and claim-level evidence,
    not invented URLs or curriculum from memory. Validate before writing.

@@ -9,6 +9,12 @@ server, frontend, or programmatic model client in the book workflow.
 Read `.agents/skills/write-textbook/SKILL.md`. Agree the learning promise before research,
 using information already provided. Create one retained `output/books/<book-id>/` directory.
 Load `output/learner/persona.md` if present; book goals belong in the book brief.
+A vague request is a starting point for a learning interview, not permission to produce a
+shallow or abbreviated book. Read the skill's discovery guidance, recommend depth from
+the learning goal, and translate learner preferences into concrete teaching choices.
+Current statements override inferred profile knowledge. Save durable feedback in the local
+profile; keep topic-specific scope in the book brief. The learner need not repeat quality
+requirements or specify the production process.
 Use `uv run textbook status --book <path>` to recover from disk and follow the next action.
 Never overwrite another book or interpret old application artifacts as the new format.
 
