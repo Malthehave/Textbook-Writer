@@ -30,7 +30,8 @@ frontend/dist/
 !.env.example
 
 # --- Local agent / tooling state --------------------------------------------
-.agents/
+.agents/*
+!.agents/skills/
 agent-transcripts/
 .impeccable/
 .claude/

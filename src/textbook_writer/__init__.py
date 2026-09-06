@@ -1,3 +1,3 @@
-"""Textbook Writer: manager-led source-grounded textbook compiler."""
+"""Local publishing tools for Codex-authored textbooks."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
