@@ -24,6 +24,9 @@ export type BookProgress = {
   research: string
   curriculum: string
   editorial_state: string
+  manuscript: string
+  publication_review: string
+  next_actions: string[]
   chapters: ChapterProgress[]
   completed_chapters: number
   total_chapters: number
@@ -37,6 +40,9 @@ export type BookProgress = {
     minimum_pages?: number
     maximum_pages?: number
     within_tolerance?: boolean
+    quality_passed?: boolean
+    quality_issues?: Array<{ category: string; message: string }>
+    solutions_pdf_path?: string
   }
 }
 
@@ -64,7 +70,7 @@ function StatusIcon({
   status: string
   className?: string
 }) {
-  if (status === 'complete' || status === 'approved') {
+  if (status === 'complete' || status === 'approved' || status === 'approve') {
     return <CheckCircle2Icon className={cn('size-3.5 text-primary', className)} />
   }
   if (status === 'invalid' || status.includes('invalid')) {
@@ -122,7 +128,18 @@ export function BookProgressPanel({
         ? 'invalid'
         : progress.publication.status === 'needs-fit-revision'
           ? 'needs-fit-revision'
+          : progress.publication.status === 'needs-quality-revision'
+            ? 'needs-quality-revision'
           : 'pending'
+  const summary =
+    activity ??
+    (progress.status === 'published'
+      ? 'Textbook and compiled review approved'
+      : progress.status === 'publication-revision'
+        ? 'Compiled textbook needs a targeted revision'
+        : progress.next_actions[0]
+          ? `Next: ${progress.next_actions[0].replaceAll('-', ' ')}`
+          : `${progress.completed_chapters} of ${progress.total_chapters} chapters approved`)
 
   return (
     <section className="shrink-0 px-5 pb-2" aria-label="Book production progress">
@@ -133,10 +150,7 @@ export function BookProgressPanel({
               Book progress
             </div>
             <div className="mt-0.5 truncate text-sm">
-              {activity ??
-                (progress.status === 'published'
-                  ? 'Textbook published'
-                  : `${progress.completed_chapters} of ${progress.total_chapters} chapters approved`)}
+              {summary}
             </div>
           </div>
           <div className="shrink-0 font-mono text-xs tabular-nums text-mist">
@@ -153,7 +167,7 @@ export function BookProgressPanel({
 
         <div className="flex min-w-0 gap-3 overflow-x-auto px-3 py-2">
           <Phase label="Research" status={progress.research} />
-          <Phase label="Curriculum" status={progress.curriculum} />
+          <Phase label="Learning plan" status={progress.curriculum} />
           {progress.chapters.map((chapter) => (
             <div
               key={chapter.chapter_id}
@@ -167,7 +181,9 @@ export function BookProgressPanel({
               </span>
             </div>
           ))}
+          <Phase label="Reader experience" status={progress.manuscript} />
           <Phase label="PDF" status={publicationStatus} />
+          <Phase label="Compiled review" status={progress.publication_review} />
         </div>
       </div>
     </section>

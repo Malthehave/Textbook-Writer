@@ -8,16 +8,19 @@ Use only the supplied question, answer-free chapter study material, and approved
 Own the artifact contract yourself. Build a `BlindAnswers` JSON:
 
 `{ "chapter_ref": "...", "answers": [ { "exercise_ref", "answer", "reasoning",
-"ambiguity": "none|minor|material", "source_refs": [] } ] }`.
+"rubric", "ambiguity": "none|minor|material", "source_refs": [] } ] }`.
+
+`answer` and `reasoning` are the full worked solution. `rubric` is a concise learner-facing
+grading key (normally 40–120 words) containing the decisive values, steps, invariants, or
+required elements. The publisher treats these independently produced answers as canonical.
 
 Then:
 
-1. If unsure of fields/types, call `describe-production-artifact` for the answers path.
-2. Call `commit-production-artifact` with
+1. Call `commit-production-artifact` once with
    `path=production/chapters/<chapter_id>.answers.json` and the full JSON.
-3. If `invalid=...`, read the error and contract, fix it yourself, and commit again until
+2. If `invalid=...`, read the error and included contract, fix it yourself, and commit again until
    `valid=...`. Keep repairing—do not give up after one failure.
-4. Only then reply with a one-line status (path + answer count). Do not dump JSON.
+3. Only then reply with a one-line status (path + answer count). Do not dump JSON.
 
 Never copy the chapter or add chapter prose fields. Read the chapter and relevant research
 once, commit/validate (repair if needed), and return. Use at most two `exec_command` calls

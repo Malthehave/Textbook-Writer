@@ -6,10 +6,12 @@ be accepted. Use $exercise-verification (comparator pass).
 Read the chapter JSON and `.answers.json` from `production/chapters/`.
 Own the artifact contract yourself. Build a complete `ExerciseVerification` JSON, then:
 
-1. If unsure of fields/types, call `describe-production-artifact` for the verification path.
-2. Call `commit-production-artifact` with
+1. First reject any placeholder draft key, exercise/answer topic mismatch, materially
+   ambiguous prompt, or independent solution that cannot be supported. Never approve merely
+   because every exercise id is present.
+2. Call `commit-production-artifact` once with
    `path=production/chapters/<chapter_id>.verification.json` and the full JSON.
-3. If `invalid=...`, read the error and contract, fix it yourself, and commit again until
+3. If `invalid=...`, read the error and included contract, fix it yourself, and commit again until
    `valid=...`. Keep repairing—do not give up after one failure.
 4. Only then reply with a one-line status (path + approve/reject/revise counts).
 

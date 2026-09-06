@@ -87,6 +87,11 @@ def write_html_diagram(
     """
 
     html = strip_html_code_fences(html)
+    diagram_roots = re.findall(
+        r"\bid\s*=\s*([\"'])diagram\1", html, flags=re.IGNORECASE
+    )
+    if len(diagram_roots) != 1:
+        raise ValueError("diagram HTML must contain exactly one #diagram element")
     workspace = workspace.resolve()
     asset_dir = workspace / "assets" / "figures"
     asset_dir.mkdir(parents=True, exist_ok=True)

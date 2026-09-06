@@ -138,6 +138,18 @@ function toolActivity(toolName: string, input: unknown): string {
   const text = inputText(input)
   const chapter = chapterLabel(input)
   if (toolName === 'research-architect') return 'Researching and grounding the scope'
+  if (toolName === 'lead-author') {
+    return /\b(revis|rewrit|fix|update)\w*/i.test(text)
+      ? 'Revising the manuscript as one coherent book'
+      : 'Designing and writing the complete learning experience'
+  }
+  if (toolName === 'reader-experience-editor') {
+    return 'Reading and scoring the complete learner experience'
+  }
+  if (toolName === 'publication-reviewer') {
+    return 'Inspecting every compiled PDF page'
+  }
+  // Legacy session tool labels.
   if (toolName === 'curriculum-architect') return 'Planning the textbook curriculum'
   if (toolName === 'chapter-writer') {
     return /\b(revis|rewrit|fix|update)\w*/i.test(text)

@@ -44,8 +44,18 @@ class ModelPrice:
         )
 
 
-# GPT-5.6 family — standard short / long context (developers.openai.com/api/docs/pricing).
+# Standard short / long context (developers.openai.com/api/docs/pricing).
 MODEL_REGISTRY: dict[str, ModelPrice] = {
+    "gpt-6-astra": ModelPrice(
+        input=10.00,
+        cached_input=1.00,
+        cache_write=12.50,
+        output=50.00,
+        long_input=20.00,
+        long_cached_input=2.00,
+        long_cache_write=25.00,
+        long_output=75.00,
+    ),
     "gpt-5.6-sol": ModelPrice(
         input=5.00,
         cached_input=0.50,
@@ -79,7 +89,7 @@ MODEL_REGISTRY: dict[str, ModelPrice] = {
 }
 
 PRICING_SOURCE = "https://developers.openai.com/api/docs/pricing"
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gpt-6-astra"
 
 
 def lookup_model_price(model_id: str) -> ModelPrice | None:

@@ -45,7 +45,12 @@
   #v(1fr)
   #text(font: "Avenir Next", size: 10pt, weight: "semibold", fill: accent, tracking: 1.4pt)[TEXTBOOK WRITER]
   #v(16pt)
-  #text(font: "Avenir Next", size: 30pt, weight: "semibold", fill: ink)[#title]
+  #let title-size = if title.len() > 92 { 20pt } else if title.len() > 66 { 24pt } else { 30pt }
+  #block(width: 88%)[
+    #set align(center)
+    #set text(hyphenate: false)
+    #text(font: "Avenir Next", size: title-size, weight: "semibold", fill: ink)[#title]
+  ]
   #v(12pt)
   #block(width: 78%)[
     #set align(center)
@@ -163,8 +168,10 @@
   #text(font: "Avenir Next", weight: "semibold", fill: accent)[Exercise #number]
   #v(4pt)
   #prompt
-  #v(5pt)
-  #link(solution-label)[#text(size: 8pt, fill: accent)[Jump to answer →]]
+  #if solution-label != none {
+    v(5pt)
+    link(solution-label)[#text(size: 8pt, fill: accent)[Jump to answer →]]
+  }
 ]
 
 #let solution-box(number, answer, reasoning, exercise-label) = block(
@@ -176,6 +183,8 @@
   #answer
   #v(5pt)
   #text(style: "italic", fill: muted)[#reasoning]
-  #v(5pt)
-  #link(exercise-label)[#text(size: 8pt, fill: accent)[← Back to exercise]]
+  #if exercise-label != none {
+    v(5pt)
+    link(exercise-label)[#text(size: 8pt, fill: accent)[← Back to exercise]]
+  }
 ]

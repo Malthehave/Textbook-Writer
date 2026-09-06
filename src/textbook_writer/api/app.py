@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -29,6 +30,7 @@ from textbook_writer.api.store import (
 from textbook_writer.api.stream import stream_agent_run
 from textbook_writer.api.subagent_events import normalize_subagent_event
 from textbook_writer.runtime.agents import (
+    cleanup_stale_sandbox_snapshots,
     create_session_book,
     sandbox_tool_run_config,
     session_book_root,
@@ -54,10 +56,29 @@ SESSIONS_DB = Path(
     os.environ.get("TEXTBOOK_SESSIONS_DB", API_ROOT / "output" / "ui-sessions.sqlite")
 ).resolve()
 
+_SNAPSHOT_CLEANUP_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+async def _snapshot_cleanup_loop() -> None:
+    while True:
+        await asyncio.sleep(_SNAPSHOT_CLEANUP_INTERVAL_SECONDS)
+        cleanup_stale_sandbox_snapshots()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    cleanup_stale_sandbox_snapshots()
+    task = asyncio.create_task(_snapshot_cleanup_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 store = SessionStore(SESSIONS_DB)
 active_session_runs: set[str] = set()
 persona_interview_active = False
-app = FastAPI(title="Textbook Writer API", version="0.1.0")
+app = FastAPI(title="Textbook Writer API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -301,7 +322,7 @@ def session_debug(session_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/sessions/{session_id}/artifacts")
-def session_artifacts(session_id: str) -> list[dict[str, str | int]]:
+def session_artifacts(session_id: str) -> list[dict[str, str | int | bool]]:
     if store.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
     return list_artifacts(_book_root(session_id))

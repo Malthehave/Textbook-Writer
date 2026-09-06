@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from importlib.resources import files
 from pathlib import Path
+import asyncio
+import json
 import shutil
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,6 +17,10 @@ from textbook_writer.runtime.pdf import (
     target_page_range,
 )
 from textbook_writer.runtime.agents.html_diagram_author.render import write_html_diagram
+from textbook_writer.runtime.agents.publication_reviewer.agent import (
+    build_render_publication_preview_tool,
+)
+from textbook_writer.runtime.workspace_tools import write_json
 
 
 def test_book_output_stem_slugs_title() -> None:
@@ -141,3 +148,22 @@ def test_textbook_template_numbers_and_centers_display_equations() -> None:
     title_page = template.split("#let title-page")[1].split("#let objective-box")[0]
     assert title_page.index("#v(1fr)") < title_page.index("[#title]")
     assert title_page.rindex("#v(1.15fr)") > title_page.index("[#purpose]")
+
+
+def test_publication_preview_returns_every_page_without_contact_sheets(tmp_path: Path) -> None:
+    if shutil.which("typst") is None or shutil.which("pdftoppm") is None:
+        pytest.skip("Typst and pdftoppm are required")
+    pdf = compile_typst(
+        '#set page(paper: "a4")\nFirst page\n#pagebreak()\nSecond page',
+        tmp_path / "build" / "preview.pdf",
+    )
+    write_json(
+        tmp_path / "production" / "publication-report.json",
+        {"pdf_path": str(pdf)},
+    )
+    tool = build_render_publication_preview_tool(tmp_path)
+    result = asyncio.run(tool.on_invoke_tool(MagicMock(), json.dumps({})))
+    assert len(result) == 3
+    assert "pages=2" in result[0].text
+    assert result[1].image_url.startswith("data:image/png;base64,")
+    assert result[2].image_url.startswith("data:image/png;base64,")

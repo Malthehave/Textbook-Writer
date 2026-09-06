@@ -17,6 +17,10 @@ from agents.sandbox import Manifest, SandboxRunConfig
 from agents.sandbox.capabilities import Filesystem, LocalDirLazySkillSource, Shell, Skills
 from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
+from agents.sandbox.snapshot_defaults import (
+    cleanup_stale_default_local_snapshots,
+    default_local_snapshot_base_dir,
+)
 
 BOOKS_ROOT = Path(os.environ.get("TEXTBOOK_BOOKS_ROOT", "/books")).resolve()
 _SESSION_ID_RE = re.compile(r"^session-[0-9a-f]{10}$")
@@ -70,8 +74,20 @@ def sandbox_tool_run_config(*, root: str | Path) -> RunConfig:
     )
 
 
-from textbook_writer.runtime.agents.chapter_writer.agent import build_chapter_writer_agent
+def cleanup_stale_sandbox_snapshots() -> None:
+    """Delete local sandbox snapshot tarballs past the SDK's default TTL (30 days).
+
+    The Agents SDK exposes this but never calls it itself, so a long-running service
+    using ``UnixLocalSandboxClient`` must call it periodically or the snapshot
+    directory (``~/.local/state/openai-agents-python/sandbox/snapshots``) grows
+    without bound.
+    """
+
+    cleanup_stale_default_local_snapshots(default_local_snapshot_base_dir())
+
+
 from textbook_writer.runtime.agents.chapter_reviewer.agent import build_chapter_reviewer_agent
+from textbook_writer.runtime.agents.chapter_writer.agent import build_chapter_writer_agent
 from textbook_writer.runtime.agents.curriculum_architect.agent import (
     build_curriculum_architect_agent,
 )
@@ -81,6 +97,9 @@ from textbook_writer.runtime.agents.independent_verifier.agent import (
 )
 from textbook_writer.runtime.agents.manager import build_manager_agent
 from textbook_writer.runtime.agents.persona_interviewer import build_persona_interviewer_agent
+from textbook_writer.runtime.agents.publication_reviewer.agent import (
+    build_publication_reviewer_agent,
+)
 from textbook_writer.runtime.agents.research_architect.agent import build_research_architect_agent
 from textbook_writer.runtime.agents.solution_comparator.agent import (
     build_solution_comparator_agent,
@@ -96,8 +115,10 @@ __all__ = [
     "build_independent_verifier_agent",
     "build_manager_agent",
     "build_persona_interviewer_agent",
+    "build_publication_reviewer_agent",
     "build_research_architect_agent",
     "build_solution_comparator_agent",
+    "cleanup_stale_sandbox_snapshots",
     "create_session_book",
     "sandbox_tool_run_config",
     "session_book_root",

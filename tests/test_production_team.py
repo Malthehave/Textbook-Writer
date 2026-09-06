@@ -44,9 +44,9 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
 
     assert _skill_names(manager) == {"manager-orchestration"}
     assert _skill_names(research) == {"research"}
-    assert _skill_names(curriculum) == set()
+    assert _skill_names(curriculum) == {"narrative-architecture"}
     assert _skill_names(writer) == {"textbook-prose"}
-    assert _skill_names(reviewer) == set()
+    assert _skill_names(reviewer) == {"editorial-review"}
     assert _skill_names(visual) == {"technical-html-diagram"}
     assert _skill_names(verifier) == {"exercise-verification"}
     assert _skill_names(comparator) == {"exercise-verification"}
@@ -63,27 +63,20 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
         assert specialist.model_settings.reasoning.summary == "auto"
         assert specialist.output_type is None
 
-    assert _tool_names(writer) == {
-        "describe-production-artifact",
-        "commit-production-artifact",
-        "validate-production-artifact",
-        "html-diagram-author",
-    }
+    assert _tool_names(writer) == {"commit-production-artifact"}
     assert _tool_names(research) == {
         "web_search",
-        "describe-production-artifact",
         "commit-production-artifact",
-        "validate-production-artifact",
     }
-    assert {
-        "describe-production-artifact",
-        "commit-production-artifact",
-        "validate-production-artifact",
-    } <= _tool_names(curriculum)
+    assert _tool_names(curriculum) == {"commit-production-artifact"}
+    assert _tool_names(visual) == {
+        "rasterize-html-diagram",
+        "attach-html-diagram",
+    }
     manager_tools = _tool_names(manager)
-    assert "html-diagram-author" not in manager_tools
-    assert "chapter-writer" in manager_tools
-    assert "chapter-reviewer" in manager_tools
+    assert "html-diagram-author" in manager_tools
+    assert "lead-author" in manager_tools
+    assert "reader-experience-editor" in manager_tools
     assert "commit-production-artifact" not in manager_tools
 
     prose = (
@@ -96,13 +89,16 @@ def test_each_agent_gets_only_its_own_skills(tmp_path: Path) -> None:
     assert "On a rewrite, preserve existing figures and assets" in writer.instructions
     assert "frozen during exercise QA" in writer.instructions
     assert "at most two `exec_command` calls" in writer.instructions
-    assert "Never create or edit `.answers.json`" in writer.instructions
-    assert "publication-fit length revision" in writer.instructions
-    assert "do not call the" in writer.instructions
+    assert "Never create or edit" in writer.instructions
+    assert "publication-report.json" in writer.instructions
+    assert "developed paragraphs with transitions and varied sentence rhythm" in writer.instructions
+    assert "manuscript.review.json" in writer.instructions
     assert "commit-production-artifact" in writer.instructions
-    assert "Do not estimate final PDF page usage" in reviewer.instructions
-    assert "only authority for page count" in reviewer.instructions
+    assert "reader_experience" in reviewer.instructions
+    assert "Approval requires at least 4" in reviewer.instructions
     assert "optional polish" in reviewer.instructions
+    assert "$editorial-review" in reviewer.instructions
+    assert "learner-visible manuscript" in reviewer.instructions
     assert "at most one corrective rasterization" in visual.instructions
     assert "BlindAnswers" in verifier.instructions
     assert "commit-production-artifact" in verifier.instructions
@@ -122,8 +118,7 @@ def test_agent_capabilities_shell_filesystem_and_optional_skills() -> None:
         )
     )
     assert {Shell, Filesystem, Skills} <= {type(c) for c in writer_caps}
-    assert {Shell, Filesystem} <= {type(c) for c in curriculum_caps}
-    assert Skills not in {type(c) for c in curriculum_caps}
+    assert {Shell, Filesystem, Skills} <= {type(c) for c in curriculum_caps}
 
 
 def test_agent_prompts_load_from_markdown(tmp_path: Path) -> None:

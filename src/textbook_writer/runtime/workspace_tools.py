@@ -13,12 +13,15 @@ from textbook_writer.models.product import (
     ChapterReview,
     EditorialState,
     ExerciseVerification,
+    ManuscriptReview,
+    PublicationReview,
     ProductBook,
     ProductBookPlan,
     ProductChapter,
     Research,
 )
 from textbook_writer.runtime.pdf import book_output_stem, build_textbook_pdf_file
+from textbook_writer.runtime.quality import forecast_book_pages
 
 STAGES_DIRNAME = "production"
 BOOK_FILENAME = "book.json"
@@ -64,6 +67,10 @@ def _model_for_artifact_path(artifact_path: str) -> type[BaseModel]:
         return ProductBookPlan
     if artifact_path == "production/editorial-state.json":
         return EditorialState
+    if artifact_path == "production/manuscript.review.json":
+        return ManuscriptReview
+    if artifact_path == "production/publication.review.json":
+        return PublicationReview
     if relative.name.endswith(".answers.json"):
         return BlindAnswers
     if relative.name.endswith(".review.json"):
@@ -111,6 +118,16 @@ def artifact_contract_help(artifact_path: str) -> str:
             "notes: audience/learning_goal are plain strings; no extra keys; "
             "topic source_refs are source_ids (not URLs); ≥2 hosts/topic."
         )
+    elif model is ProductBookPlan:
+        chapter_schema = schema.get("$defs", {}).get("PlannedChapter", {})
+        chapter_properties = chapter_schema.get("properties", {})
+        lines.append("chapters[] required fields:")
+        for name in chapter_schema.get("required", []):
+            prop = chapter_properties.get(name, {})
+            line = f"- chapters[].{name}: {_schema_type_label(prop)}"
+            if isinstance(prop, dict) and prop.get("description"):
+                line = f"{line} — {prop['description']}"
+            lines.append(line)
     elif model is ProductChapter:
         lines.append(
             "notes: exercise count and learning_outcomes must match book-plan.json; "
@@ -144,8 +161,9 @@ def commit_production_artifact_tool(book_root: Path) -> FunctionTool:
     def commit_production_artifact(path: str, content: str) -> str:
         """Write one canonical production JSON file and validate it immediately.
 
-        Use this for research, book-plan, chapter, review, answers, and verification
-        artifacts. `path` is workspace-relative (e.g. production/research.json).
+        Use this for research, book-plan, chapter, chapter/manuscript review, answers, and
+        verification artifacts. `path` is workspace-relative
+        (e.g. production/research.json).
         `content` is the full JSON document as a string.
 
         Returns `valid=<path> schema=<Name>` on success.
@@ -165,7 +183,9 @@ def commit_production_artifact_tool(book_root: Path) -> FunctionTool:
             return _invalid_artifact_message(path, "top-level JSON value must be an object")
         write_json(dest, payload)
         try:
-            model_name = _validate_production_artifact(workspace, rel)
+            model_name = _validate_production_artifact(
+                workspace, rel, require_complete=False
+            )
         except Exception as exc:
             return _invalid_artifact_message(rel, exc)
         return f"valid={rel} schema={model_name}"
@@ -206,6 +226,12 @@ def production_artifact_tools(book_root: Path) -> list[FunctionTool]:
     ]
 
 
+def production_commit_tools(book_root: Path) -> list[FunctionTool]:
+    """Minimal specialist write surface: one commit call validates atomically."""
+
+    return [commit_production_artifact_tool(book_root)]
+
+
 def _assemble_book(workspace: Path) -> ProductBook:
     stages = stages_dir(workspace)
     research = Research.model_validate_json(
@@ -218,6 +244,7 @@ def _assemble_book(workspace: Path) -> ProductBook:
     if not chapter_dir.is_dir():
         raise FileNotFoundError("missing production/chapters/")
     chapters: list[ProductChapter] = []
+    answer_keys: list[BlindAnswers] = []
     verifications: list[ExerciseVerification] = []
     for chapter_meta in plan.chapters:
         chapter_path = chapter_dir / f"{chapter_meta.chapter_id}.json"
@@ -225,15 +252,24 @@ def _assemble_book(workspace: Path) -> ProductBook:
             chapter_path.read_text(encoding="utf-8")
         )
         chapters.append(chapter)
-        review_path = chapter_dir / f"{chapter_meta.chapter_id}.review.json"
-        review = ChapterReview.model_validate_json(review_path.read_text(encoding="utf-8"))
-        if review.chapter_ref != chapter_meta.chapter_id or review.decision != "approve":
-            raise RuntimeError(
-                f"{chapter_meta.chapter_id} needs an approved editorial review before publish"
-            )
         _validate_figure_assets(workspace, chapter)
+        answers_path = chapter_dir / f"{chapter_meta.chapter_id}.answers.json"
+        answers = BlindAnswers.model_validate_json(
+            answers_path.read_text(encoding="utf-8")
+        )
+        if answers.chapter_ref != chapter_meta.chapter_id:
+            raise RuntimeError(
+                f"{chapter_meta.chapter_id} independent answers reference the wrong chapter"
+            )
+        if answers_path.stat().st_mtime < chapter_path.stat().st_mtime:
+            raise RuntimeError(f"{chapter_meta.chapter_id} independent answers are stale")
+        answer_keys.append(answers)
         verification_path = chapter_dir / f"{chapter_meta.chapter_id}.verification.json"
         if verification_path.is_file():
+            if verification_path.stat().st_mtime < max(
+                chapter_path.stat().st_mtime, answers_path.stat().st_mtime
+            ):
+                raise RuntimeError(f"{chapter_meta.chapter_id} exercise verification is stale")
             verifications.append(
                 ExerciseVerification.model_validate_json(
                     verification_path.read_text(encoding="utf-8")
@@ -241,18 +277,31 @@ def _assemble_book(workspace: Path) -> ProductBook:
             )
     if len(verifications) != len(chapters):
         raise RuntimeError("every chapter needs a .verification.json before publish")
-    editorial_state = EditorialState.model_validate_json(
-        (stages / "editorial-state.json").read_text(encoding="utf-8")
+    manuscript_review_path = stages / "manuscript.review.json"
+    manuscript_review = ManuscriptReview.model_validate_json(
+        manuscript_review_path.read_text(encoding="utf-8")
     )
-    accepted = set(editorial_state.accepted_chapter_refs)
-    planned = {chapter.chapter_id for chapter in plan.chapters}
-    if accepted != planned:
-        raise RuntimeError("editorial state must accept every planned chapter before publish")
+    if manuscript_review.decision != "approve":
+        raise RuntimeError("the complete manuscript needs editorial approval before publish")
+    if (
+        manuscript_review.reader_experience is None
+        or manuscript_review.reader_experience.minimum < 4
+    ):
+        raise RuntimeError(
+            "the complete manuscript needs reader-experience scores of at least 4 before publish"
+        )
+    if any(
+        manuscript_review_path.stat().st_mtime
+        < (chapter_dir / f"{chapter.chapter_id}.json").stat().st_mtime
+        for chapter in plan.chapters
+    ):
+        raise RuntimeError("the complete manuscript review is stale")
     book = ProductBook(
         book_id=workspace.name,
         research=research,
         plan=plan,
         chapters=chapters,
+        answer_keys=answer_keys,
         exercise_verifications=verifications,
     )
     write_model(stages / BOOK_FILENAME, book)
@@ -268,7 +317,9 @@ def _validate_figure_assets(workspace: Path, chapter: ProductChapter) -> None:
             raise FileNotFoundError(f"figure asset missing at {path}")
 
 
-def _validate_chapter_contract(workspace: Path, chapter: ProductChapter) -> None:
+def _validate_chapter_contract(
+    workspace: Path, chapter: ProductChapter, *, require_planned_visual: bool = True
+) -> None:
     production = stages_dir(workspace)
     research = Research.model_validate_json(
         (production / "research.json").read_text(encoding="utf-8")
@@ -302,7 +353,7 @@ def _validate_chapter_contract(workspace: Path, chapter: ProductChapter) -> None
     if not used_sources <= source_ids:
         missing = ", ".join(sorted(used_sources - source_ids))
         raise ValueError(f"{chapter.chapter_id} has unknown source refs: {missing}")
-    if planned.visual is not None:
+    if require_planned_visual and planned.visual is not None:
         figure_ids = {figure.figure_id for figure in chapter.figures}
         if planned.visual.visual_id not in figure_ids:
             raise ValueError(
@@ -310,7 +361,9 @@ def _validate_chapter_contract(workspace: Path, chapter: ProductChapter) -> None
             )
 
 
-def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
+def _validate_production_artifact(
+    workspace: Path, artifact_path: str, *, require_complete: bool = True
+) -> str:
     relative = PurePosixPath(artifact_path)
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError("artifact path must be workspace-relative")
@@ -322,7 +375,9 @@ def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
     validated = model.model_validate_json(path.read_text(encoding="utf-8"))
     if isinstance(validated, ProductChapter):
         _validate_figure_assets(workspace, validated)
-        _validate_chapter_contract(workspace, validated)
+        _validate_chapter_contract(
+            workspace, validated, require_planned_visual=require_complete
+        )
     elif isinstance(validated, BlindAnswers):
         chapter_path = path.with_name(f"{validated.chapter_ref}.json")
         chapter = ProductChapter.model_validate_json(
@@ -333,6 +388,21 @@ def _validate_production_artifact(workspace: Path, artifact_path: str) -> str:
         if actual != expected:
             raise ValueError(
                 f"{validated.chapter_ref} blind answers must cover every exercise exactly once"
+            )
+    elif isinstance(validated, ManuscriptReview):
+        plan = ProductBookPlan.model_validate_json(
+            (stages_dir(workspace) / "book-plan.json").read_text(encoding="utf-8")
+        )
+        planned_refs = {chapter.chapter_id for chapter in plan.chapters}
+        unknown_refs = {
+            note.chapter_ref for note in validated.notes if note.chapter_ref not in planned_refs
+        }
+        if unknown_refs:
+            refs = ", ".join(sorted(unknown_refs))
+            raise ValueError(f"manuscript review references unknown chapters: {refs}")
+        if validated.reader_experience is None:
+            raise ValueError(
+                "manuscripts require the complete reader_experience scorecard"
             )
     elif isinstance(validated, ChapterReview):
         expected_ref = path.name.removesuffix(".review.json")
@@ -385,8 +455,9 @@ def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
     def build_textbook_pdf() -> str:
         """Assemble production/*.json into book.json and compile the Typst PDF under build/.
 
-        Call only after every planned chapter has an approved editorial review, an
-        all-approve exercise verification, and is accepted in editorial-state.json.
+        Call only after the complete manuscript has a fresh approved reader-experience
+        review and every planned chapter has all-approve exercise verification. Legacy
+        modes additionally require approved per-chapter reviews and editorial state.
         Returns measured paths and page counts — never invent those yourself.
         """
 
@@ -402,7 +473,73 @@ def build_textbook_pdf_tool(book_root: Path) -> FunctionTool:
             f"title={report['title']} pdf={report['pdf_path']} "
             f"pages={report['actual_pages']} target={report['target_pages']} "
             f"allowed={report['minimum_pages']}-{report['maximum_pages']} status={fit} "
+            f"quality={'passed' if report['quality_passed'] else 'needs-revision'} "
             f"report=production/{PUBLICATION_REPORT_FILENAME}"
         )
 
     return build_textbook_pdf
+
+
+def forecast_textbook_pages_tool(book_root: Path) -> FunctionTool:
+    """Return an incremental whole-artifact page forecast before final compilation."""
+
+    workspace = Path(book_root)
+
+    @function_tool(name_override="forecast-textbook-pages")
+    def forecast_textbook_pages() -> str:
+        """Forecast complete book length from actual chapters plus remaining plan budgets.
+
+        Call immediately after curriculum, after the first representative chapter, and
+        before exercise solving. Typst measurement remains authoritative after publish.
+        """
+
+        production = stages_dir(workspace)
+        plan = ProductBookPlan.model_validate_json(
+            (production / "book-plan.json").read_text(encoding="utf-8")
+        )
+        research = Research.model_validate_json(
+            (production / "research.json").read_text(encoding="utf-8")
+        )
+        chapter_dir = production / CHAPTERS_DIRNAME
+        chapters: list[ProductChapter] = []
+        answers: list[BlindAnswers] = []
+        for planned in plan.chapters:
+            chapter_path = chapter_dir / f"{planned.chapter_id}.json"
+            if chapter_path.is_file():
+                chapters.append(
+                    ProductChapter.model_validate_json(
+                        chapter_path.read_text(encoding="utf-8")
+                    )
+                )
+            answers_path = chapter_dir / f"{planned.chapter_id}.answers.json"
+            if answers_path.is_file():
+                answers.append(
+                    BlindAnswers.model_validate_json(
+                        answers_path.read_text(encoding="utf-8")
+                    )
+                )
+        forecast = forecast_book_pages(
+            plan=plan,
+            chapters=chapters,
+            answer_keys=answers,
+            source_count=len(research.sources),
+        )
+        return json.dumps(forecast, sort_keys=True)
+
+    return forecast_textbook_pages
+
+
+def inspect_pipeline_state_tool(book_root: Path) -> FunctionTool:
+    """Expose the code-derived state machine so the manager does not reconstruct it."""
+
+    workspace = Path(book_root)
+
+    @function_tool(name_override="inspect-pipeline-state")
+    def inspect_pipeline_state() -> str:
+        """Return canonical phase status and exact next actions derived from disk state."""
+
+        from textbook_writer.api.progress import derive_book_progress
+
+        return json.dumps(derive_book_progress(workspace), sort_keys=True)
+
+    return inspect_pipeline_state

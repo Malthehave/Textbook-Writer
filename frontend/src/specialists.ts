@@ -1,5 +1,9 @@
 export const SPECIALIST_TOOL_NAMES = new Set([
   'research-architect',
+  'lead-author',
+  'reader-experience-editor',
+  'publication-reviewer',
+  // Legacy session tools remain recognizable in restored transcripts.
   'curriculum-architect',
   'chapter-writer',
   'chapter-reviewer',
@@ -13,6 +17,9 @@ export function isSpecialistTool(toolName: string): boolean {
 }
 
 export function specialistLabel(toolName: string): string {
+  if (toolName === 'lead-author') return 'Lead author'
+  if (toolName === 'reader-experience-editor') return 'Reader-experience editor'
+  if (toolName === 'publication-reviewer') return 'Publication reviewer'
   return toolName
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

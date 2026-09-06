@@ -21,13 +21,16 @@ def test_manager_registers_lean_specialists(tmp_path: Path) -> None:
     assert names == {
         "web_search",
         "build-textbook-pdf",
+        "forecast-textbook-pages",
+        "inspect-pipeline-state",
         "validate-production-artifact",
         "research-architect",
-        "curriculum-architect",
-        "chapter-writer",
-        "chapter-reviewer",
+        "lead-author",
+        "reader-experience-editor",
         "independent-verifier",
         "solution-comparator",
+        "html-diagram-author",
+        "publication-reviewer",
     }
     kinds = {type(cap) for cap in agent.capabilities}
     assert {Shell, Filesystem, Skills} <= kinds
@@ -42,39 +45,28 @@ def test_book_output_stem_and_stages_dir(tmp_path: Path) -> None:
     assert stages_dir(tmp_path).name == "production"
 
 
-def test_manager_enforces_editorial_gate_and_shared_state(tmp_path: Path) -> None:
+def test_manager_enforces_reader_experience_gate_and_shared_state(tmp_path: Path) -> None:
     book = tmp_path / "book"
     book.mkdir()
     agent = build_manager_agent(model="gpt-5.6-luna", book_root=book)
-    assert "chapter-reviewer" in agent.instructions
-    assert "editorial-state.json" in agent.instructions
-    assert "fresh run" in agent.instructions
-    assert "self-contained `input`" in agent.instructions
-    assert "book filesystem" in agent.instructions
-    assert "copying their contents into `input`" in agent.instructions
-    assert "15%-tolerance range" in agent.instructions
+    assert "reader-experience-editor" in agent.instructions
+    assert "lead-author" in agent.instructions
+    assert "quality-slice" in agent.instructions
+    assert "scorecard" in agent.instructions
+    assert "15%" in agent.instructions
     assert "latest compiled PDF" in agent.instructions
-    assert "Specialists own artifact format" in agent.instructions
     assert "validate-production-artifact" in agent.instructions
-    assert "Do not spend a blind-solver run" in agent.instructions
-    assert "Keep rewriting/re-verifying until every verdict is" in agent.instructions
-    assert "Never run two chapter writers concurrently" in agent.instructions
-    assert "You can use `web_search` directly" in agent.instructions
-    assert "Formal subject research still belongs" in agent.instructions
-    assert "Learner persona section" in agent.instructions
+    assert "Never run two lead-author calls concurrently" in agent.instructions
+    assert "manuscript.review.json" in agent.instructions
+    assert "inspect-pipeline-state" in agent.instructions
+    assert "Formal subject evidence" in agent.instructions
     skill = (
         Path(__file__).resolve().parents[1]
         / "src/textbook_writer/runtime/agents/manager/skills/manager-orchestration/SKILL.md"
     ).read_text(encoding="utf-8")
-    assert "Repeat until `approve`" in skill
-    assert "The next chapter may now be drafted" in skill
-    assert "The review file is the canonical brief" in skill
-    assert "six-page target accepts five through seven pages" in skill
-    assert "Keep making targeted fit corrections" in skill
-    assert "Do not estimate page consumption from PNG pixels" in skill
-    assert "Never defer schema or figure-path validation" in skill
-    assert "do not invoke the blind solver" in skill
-    assert "6 pages or fewer" in skill
-    assert "at most 3 exercises" in skill
+    assert "Reader-experience gate" in skill
+    assert "every score at least 4" in skill
+    assert "1,500–2,200 word chapter" in skill
+    assert "Never start independent exercise QA" in skill
+    assert "every PDF page as an individual preview" in skill
     assert "stop and report" not in skill.lower()
-    assert "allow at most two" not in skill

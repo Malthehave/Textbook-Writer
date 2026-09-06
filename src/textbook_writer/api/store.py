@@ -161,23 +161,32 @@ class SessionStore:
         ]
 
 
-def list_artifacts(root: Path) -> list[dict[str, str | int]]:
+def list_artifacts(root: Path) -> list[dict[str, str | int | bool]]:
     root = root.resolve()
     if not root.is_dir():
         return []
-    items: list[dict[str, str | int]] = []
+    primary_pdf = find_pdf(root)
+    items: list[dict[str, str | int | bool]] = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if relative.parts[0] in {".agents", ".cache", "state"}:
+            continue
+        if relative.parts[:2] == ("build", "review-preview"):
             continue
         if path.suffix.lower() not in {".json", ".pdf", ".png", ".html", ".typ", ".md"}:
             continue
         if path.name.endswith(".sqlite") or path.name.endswith(".tmp"):
             continue
+        stat = path.stat()
         items.append(
             {
-                "path": path.relative_to(root).as_posix(),
-                "bytes": path.stat().st_size,
+                "path": relative.as_posix(),
+                "bytes": stat.st_size,
                 "kind": path.suffix.lower().lstrip("."),
+                "modified_ns": stat.st_mtime_ns,
+                "is_primary": path.resolve() == primary_pdf,
             }
         )
     return items
@@ -196,11 +205,28 @@ def read_artifact_text(root: Path, relative: str, *, limit: int = 200_000) -> st
 
 
 def find_pdf(root: Path) -> Path | None:
-    build = root.resolve() / "build"
+    root = root.resolve()
+    build = root / "build"
     if not build.is_dir():
         return None
-    pdfs = sorted(build.glob("*.pdf"))
-    return pdfs[0] if pdfs else None
+
+    # The publication report is the source of truth. Its path can contain the
+    # container's /books prefix, so remap the filename into this process's root.
+    report = root / "production" / "publication-report.json"
+    if report.is_file():
+        try:
+            reported_path = json.loads(report.read_text(encoding="utf-8")).get("pdf_path")
+        except (json.JSONDecodeError, OSError):
+            reported_path = None
+        if isinstance(reported_path, str) and reported_path:
+            candidate = (build / Path(reported_path).name).resolve()
+            if candidate.is_relative_to(root) and candidate.is_file():
+                return candidate
+
+    pdfs = [path for path in build.glob("*.pdf") if path.is_file()]
+    primary_pdfs = [path for path in pdfs if not path.stem.endswith("-solutions")]
+    candidates = primary_pdfs or pdfs
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns) if candidates else None
 
 
 def read_debug_bundle(root: Path) -> dict[str, Any]:

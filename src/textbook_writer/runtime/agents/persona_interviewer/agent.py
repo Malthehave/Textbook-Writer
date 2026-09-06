@@ -10,12 +10,13 @@ from agents.sandbox import SandboxAgent
 from openai.types.shared_params import Reasoning
 
 from textbook_writer.runtime.agents import agent_capabilities
+from textbook_writer.runtime.model_registry import DEFAULT_MODEL
 from textbook_writer.runtime.persona import persona_dir
 
 PROMPT = (Path(__file__).with_name("prompt.md").read_text(encoding="utf-8").strip() + "\n")
 
 
-def build_persona_interviewer_agent(*, model: str = "gpt-5.6-luna") -> SandboxAgent[Any]:
+def build_persona_interviewer_agent(*, model: str = DEFAULT_MODEL) -> SandboxAgent[Any]:
     persona_dir()
     return SandboxAgent(
         name="Learner persona interviewer",

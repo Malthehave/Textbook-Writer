@@ -42,6 +42,7 @@ tmp/
 *.sqlite
 *.sqlite3
 *.db
+production-book-reference/
 
 # --- OS / editor ------------------------------------------------------------
 .DS_Store

@@ -60,6 +60,8 @@ type Artifact = {
   path: string
   bytes: number
   kind: string
+  modified_ns: number
+  is_primary: boolean
 }
 
 type ArtifactTreeNode =
@@ -79,6 +81,15 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function isSolutionsPdf(artifact: Artifact): boolean {
+  return artifact.kind === 'pdf' && /-solutions\.pdf$/i.test(artifact.path)
+}
+
+function artifactFileUrl(sessionId: string, artifact: Artifact): string {
+  const path = artifact.path.split('/').map(encodeURIComponent).join('/')
+  return `/api/sessions/${sessionId}/files/${path}?v=${artifact.modified_ns}`
 }
 
 function buildArtifactTree(artifacts: Artifact[]): ArtifactTreeNode[] {
@@ -246,13 +257,14 @@ function ArtifactTreeRows({
             <Collapsible key={node.path} defaultOpen={depth < 2 || containsSelected}>
               <CollapsibleTrigger
                 className={cn(
-                  'flex w-max min-w-full items-center gap-1.5 rounded-[var(--radius-md)] py-1.5 pr-2 text-left text-xs text-mist outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&[data-state=open]>svg:first-child]:rotate-90',
+                  'flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-[var(--radius-md)] py-1.5 pr-2 text-left text-xs text-mist outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&[data-state=open]>svg:first-child]:rotate-90',
                 )}
-                style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
+                style={{ paddingLeft: `${Math.min(0.5 + depth * 0.75, 3.5)}rem` }}
+                title={node.path}
               >
                 <ChevronRightIcon className="size-3.5 shrink-0 transition-transform" />
                 <FolderIcon className="size-3.5 shrink-0" />
-                <span className="whitespace-nowrap font-mono">{node.name}</span>
+                <span className="min-w-0 flex-1 truncate font-mono">{node.name}</span>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <ArtifactTreeRows
@@ -273,15 +285,15 @@ function ArtifactTreeRows({
             type="button"
             title={`${node.artifact.path} · ${formatBytes(node.artifact.bytes)}`}
             className={cn(
-              'flex w-max min-w-full items-center gap-1.5 rounded-[var(--radius-md)] py-1.5 pr-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
+              'flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-[var(--radius-md)] py-1.5 pr-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
               active && 'bg-surface text-foreground shadow-sm hover:bg-surface',
             )}
-            style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
+            style={{ paddingLeft: `${Math.min(0.5 + depth * 0.75, 3.5)}rem` }}
             onClick={() => onSelect(node.artifact)}
           >
             <span className="size-3.5 shrink-0" aria-hidden />
             <FileTextIcon className="size-3.5 shrink-0 text-mist" />
-            <span className="whitespace-nowrap font-mono text-xs">{node.name}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-xs">{node.name}</span>
           </button>
         )
       })}
@@ -307,20 +319,60 @@ function ArtifactList({
     )
   }
 
-  const tree = buildArtifactTree(artifacts)
+  const deliverables = artifacts
+    .filter((artifact) => artifact.kind === 'pdf' && artifact.path.startsWith('build/'))
+    .sort((a, b) => Number(isSolutionsPdf(a)) - Number(isSolutionsPdf(b)))
+  const deliverablePaths = new Set(deliverables.map((artifact) => artifact.path))
+  const tree = buildArtifactTree(
+    artifacts.filter((artifact) => !deliverablePaths.has(artifact.path)),
+  )
 
   return (
-    <div className="w-max min-w-full px-1 py-0.5">
-      <div className="mb-1 flex w-max min-w-full items-center gap-1.5 px-2 py-1 font-mono text-xs text-mist">
-        <FolderOpenIcon className="size-3.5 shrink-0" />
-        <span className="whitespace-nowrap">/book</span>
-      </div>
-      <ArtifactTreeRows
-        nodes={tree}
-        depth={0}
-        selectedArtifact={selectedArtifact}
-        onSelect={onSelect}
-      />
+    <div className="w-full min-w-0 space-y-3 px-1 py-0.5">
+      {deliverables.length > 0 ? (
+        <div className="space-y-1">
+          <div className="px-2 py-1 text-xs font-medium text-mist">Deliverables</div>
+          {deliverables.map((artifact) => {
+            const active = selectedArtifact === artifact.path
+            return (
+              <button
+                key={artifact.path}
+                type="button"
+                title={`${artifact.path} · ${formatBytes(artifact.bytes)}`}
+                className={cn(
+                  'flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
+                  active && 'bg-surface shadow-sm hover:bg-surface',
+                )}
+                onClick={() => onSelect(artifact)}
+              >
+                <FileTextIcon className="size-4 shrink-0 text-mist" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {isSolutionsPdf(artifact) ? 'Solutions PDF' : 'Book PDF'}
+                  </span>
+                  <span className="block truncate font-mono text-xs text-mist">
+                    {formatBytes(artifact.bytes)}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+      {tree.length > 0 ? (
+        <div className="min-w-0">
+          <div className="mb-1 flex w-full min-w-0 items-center gap-1.5 px-2 py-1 font-mono text-xs text-mist">
+            <FolderOpenIcon className="size-3.5 shrink-0" />
+            <span className="truncate">/book</span>
+          </div>
+          <ArtifactTreeRows
+            nodes={tree}
+            depth={0}
+            selectedArtifact={selectedArtifact}
+            onSelect={onSelect}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -335,7 +387,7 @@ function ArtifactPreview({
   sessionId: string | null
   pdfUrl: string | null
   previewPdf: boolean
-  selectedArtifact: string | null
+  selectedArtifact: Artifact | null
   artifactContent: string
 }) {
   if (previewPdf) {
@@ -344,11 +396,11 @@ function ArtifactPreview({
     }
     return <iframe title="PDF preview" src={pdfUrl} className="h-full w-full bg-paper" />
   }
-  if (selectedArtifact?.endsWith('.png') && sessionId) {
+  if (selectedArtifact?.kind === 'png' && sessionId) {
     return (
       <img
-        alt={selectedArtifact}
-        src={`/api/sessions/${sessionId}/files/${selectedArtifact}`}
+        alt={selectedArtifact.path}
+        src={artifactFileUrl(sessionId, selectedArtifact)}
         className="h-full w-full object-contain p-3"
       />
     )
@@ -472,18 +524,34 @@ export default function App() {
   function selectArtifact(artifact: Artifact) {
     setSelectedArtifact(artifact.path)
     setPreviewPdf(artifact.kind === 'pdf')
+    setArtifactsOpen(false)
     setPreviewOpen(true)
   }
 
   function openPdfPreview() {
+    if (!primaryPdf) return
+    setSelectedArtifact(primaryPdf.path)
     setPreviewPdf(true)
+    setArtifactsOpen(false)
     setPreviewOpen(true)
   }
 
   const activeSession = sessions.find((session) => session.id === sessionId) ?? null
+  const selectedArtifactRow =
+    artifacts.find((artifact) => artifact.path === selectedArtifact) ?? null
+  const primaryPdf =
+    artifacts.find((artifact) => artifact.is_primary) ??
+    artifacts.find(
+      (artifact) =>
+        artifact.kind === 'pdf' &&
+        artifact.path.startsWith('build/') &&
+        !isSolutionsPdf(artifact),
+    ) ?? null
+  const previewPdfArtifact =
+    selectedArtifactRow?.kind === 'pdf' ? selectedArtifactRow : primaryPdf
   const pdfUrl =
-    sessionId && artifacts.some((row) => row.kind === 'pdf')
-      ? `/api/sessions/${sessionId}/pdf#view=FitH`
+    sessionId && previewPdfArtifact
+      ? `${artifactFileUrl(sessionId, previewPdfArtifact)}#view=FitH`
       : null
 
   const chatSurface = (
@@ -533,10 +601,10 @@ export default function App() {
           size="sm"
           variant="ghost"
           className="shrink-0"
-          disabled={!pdfUrl}
+          disabled={!primaryPdf}
           onClick={openPdfPreview}
         >
-          Open PDF
+          Open book PDF
         </Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
@@ -632,10 +700,10 @@ export default function App() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                disabled={!pdfUrl}
+                disabled={!primaryPdf}
                 onClick={openPdfPreview}
               >
-                Open PDF
+                Open book PDF
               </Button>
             </div>
             <ScrollArea className="min-h-0 flex-1">
@@ -653,7 +721,7 @@ export default function App() {
         <DialogContent className="flex h-[min(85vh,52rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-3 p-0 sm:max-w-4xl">
           <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-3 pr-12">
             <DialogTitle className="truncate font-mono text-sm font-medium">
-              {previewPdf ? 'PDF' : selectedArtifact ?? 'Preview'}
+              {selectedArtifact ?? (previewPdf ? 'Book PDF' : 'Preview')}
             </DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -661,7 +729,7 @@ export default function App() {
               sessionId={sessionId}
               pdfUrl={pdfUrl}
               previewPdf={previewPdf}
-              selectedArtifact={selectedArtifact}
+              selectedArtifact={selectedArtifactRow}
               artifactContent={artifactContent}
             />
           </div>

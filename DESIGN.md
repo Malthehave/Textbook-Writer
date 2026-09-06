@@ -56,6 +56,9 @@ components:
     padding: "4px 8px"
 ---
 
+> UI design reference. Runtime and pipeline behavior is authoritative in
+> [`AGENTS.md`](AGENTS.md); operator setup belongs in [`README.md`](README.md).
+
 ## Overview
 
 Textbook Writer’s UI is an **operate** surface: a compile console where one manager conversation owns the book. Sessions and artifacts hang on perimeter rails; the chat floor holds the work. Visual language borrows the status grammar of Beautiful UI (loading with elapsed time, thinking traces, compact tool chips, task rows) without turning the product into a demo gallery.
@@ -86,6 +89,9 @@ Medium radii (`10–14px`) on rails and the chat well; smaller radii on chips an
 - **Thinking** — collapsible reasoning that auto-opens while streaming.
 - **Tool chips** — compact tool calls; expand for input/output/errors.
 - **Task rows** — specialist agents as live rows (running / failed / done) with nested reasoning/text.
+- **Book progress** — research, curriculum, chapter gates, complete-manuscript review,
+  PDF quality, and compiled-publication review. Show the next required action and reserve
+  “published” for a compiled artifact that passed both deterministic and visual review.
 - **Error strip** — sticky above the composer; names the failure and the recovery.
 
 ## Do's and Don'ts

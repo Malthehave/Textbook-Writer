@@ -1,32 +1,50 @@
-# React + TypeScript + Vite
+# Textbook Writer frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The frontend is the compile console for Textbook Writer. It is a React 19, TypeScript,
+Vite, Tailwind CSS, and AI SDK UI that talks to the FastAPI backend through `/api`.
 
-Currently, two official plugins are available:
+Product and pipeline behavior is documented in [`../AGENTS.md`](../AGENTS.md). The visual
+system is documented in [`../DESIGN.md`](../DESIGN.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Development
 
-## React Compiler
+From the repository root, the normal development path is:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+This starts both Docker services and serves the UI at http://localhost:3000. Source files
+under `frontend/` are mounted into the container and update through Vite HMR.
+
+To run only the frontend against an API already listening on port 8000:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+`VITE_API_PROXY` controls the proxy target and defaults to `http://localhost:8000` outside
+Compose. Compose sets it to `http://api:8000`.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```
+
+The production build runs TypeScript project compilation before Vite bundling.
+
+## UI responsibilities
+
+- List and create retained book sessions.
+- Restore manager chat history and nested specialist transcripts.
+- Stream assistant text, reasoning summaries, tool calls, errors, and cost updates.
+- Poll canonical production progress while a run is active.
+- Browse text and image artifacts and preview the latest PDF.
+- Edit or interview the durable cross-book learner persona.
+
+The backend remains authoritative for session state, artifacts, progress, and publication.
+Do not infer completion or page counts solely from transient stream state.

@@ -18,8 +18,6 @@ def test_research_architect_has_hosted_web_search_and_commit_tools(tmp_path: Pat
     }
     assert names == {
         "web_search",
-        "describe-production-artifact",
         "commit-production-artifact",
-        "validate-production-artifact",
     }
     assert agent.model_settings.response_include == ["web_search_call.action.sources"]

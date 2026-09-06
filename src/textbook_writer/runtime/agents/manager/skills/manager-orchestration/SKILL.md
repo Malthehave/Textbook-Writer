@@ -1,190 +1,110 @@
 ---
 name: manager-orchestration
 description: >-
-  How the textbook manager uses each specialist and the book filesystem, in
-  phase order. Use before calling specialists or recovering from errors.
+  Run the textbook compiler in phase order, resume safely from disk, and apply
+  reader, exercise, and publication gates.
 ---
 
 # Manager orchestration
 
-You own the learner chat. Specialists are tools. This chat is **one book**;
-canonical state is this chat’s sandbox root—not the chat transcript.
+You own the learner chat. Specialists are tools and every specialist invocation is fresh.
+Canonical state is this book's shared `production/` directory, never the transcript. Pass a
+self-contained task brief and canonical paths in every tool input. Inspect artifacts after
+short specialist status returns. Compile only with `build-textbook-pdf`.
 
-You and every specialist share that **same sandbox root** (this chat only). Each
-specialist tool call is a fresh run: put the task brief in the tool `input` string;
-they do not remember prior calls. Specialists write stage artifacts under
-`production/`; their tool returns are short status lines only. Inspect artifacts with
-**Shell** and the **file editor**. PDF compile is the `build-textbook-pdf` tool — never
-Shell-import the app package.
-
-## Roster (editor view)
-
-You are the editor. You do **not** run the diagrammer yourself — the chapter author owns
-figures. You **do** run independent exercise QA after a chapter is written (authors must
-not grade their own exercises).
+## Modern roster
 
 | Specialist | Writes |
 |---|---|
 | research-architect | `production/research.json` |
-| curriculum-architect | `production/book-plan.json` |
-| chapter-writer | `production/chapters/<id>.json` (+ figures via nested diagrammer) |
-| chapter-reviewer | `production/chapters/<id>.review.json` |
+| lead-author | `production/book-plan.json` and every `production/chapters/<id>.json` |
+| html-diagram-author | stable HTML/PNG plus atomic chapter figure attachment |
+| reader-experience-editor | `production/manuscript.review.json` |
 | independent-verifier | `production/chapters/<id>.answers.json` |
 | solution-comparator | `production/chapters/<id>.verification.json` |
+| publication-reviewer | `production/publication.review.json` |
 
-## Disk layout
+The blind solver is the canonical answer-key author. The lead author's draft answers exist
+only for comparison. The reader editor judges prose while it is still editable.
 
-| Path | Role |
-|---|---|
-| `production/research.json` | Research (sources + topics) |
-| `production/book-plan.json` | Curriculum plan |
-| `production/editorial-state.json` | Manager-owned cross-chapter memory |
-| `production/chapters/<id>.json` | Chapter + exercises |
-| `production/chapters/<id>.review.json` | Cross-chapter editorial review |
-| `production/chapters/<id>.answers.json` | Blind solve |
-| `production/chapters/<id>.verification.json` | Grade |
-| `production/book.json` | Assembled book |
-| `production/publication-report.json` | Measured page fit from the latest compile |
-| `build/<slug>.pdf` | Measured PDF |
+## Modes
 
-Before re-running a stage, `ls production/`. Resume from disk when a good artifact exists.
-Specialist JSON producers own format: they use `commit-production-artifact` /
-`validate-production-artifact` and must self-repair until valid before returning. After a
-specialist returns, call `validate-production-artifact` once as a gate. Advance only on
-`valid=...`. On `invalid=...`, re-invoke that same specialist with the exact error in tool
-input—do not edit production JSON yourself. Never defer schema or figure-path validation
-until publication.
+- `quality-slice`: default for fast iteration; one 1,500–2,200 word chapter, 2–3
+  progressive exercises, no more than one visual, 8–10 target pages. It follows a complete
+  learning progression and omits report-like front matter.
+- `short-book`: 2–3 chapters, 5,000–8,000 manuscript words, 18–28 target pages.
+- `production`: a larger full workflow using the same lead-author and reader gates.
+- `prototype`: legacy resume only; do not recommend it for a new book.
 
-## Phase order (mandatory)
+## Mandatory modern phase order
 
-### A — Goal
-Chat only. Clarify audience, depth, scope, length, and learning goals for this book.
-Collect HTTPS URLs relevant to the request. If a Learner persona section is already in your
-instructions, treat it as who-they-are background for personalization—not a curriculum.
-Do not re-ask identity or durable strengths/gaps; still agree this book's goals and scope
-in chat. Do not start research until they confirm the scope in chat.
+### A — Confirm the learning promise
 
-Pass the agreed audience, depth, scope, and target pages in the curriculum tool input.
-Page count constrains scope, never typography. Reserve 25–35% for figures, exercises,
-answers, front matter, and bibliography; budget remaining prose at roughly 350–500 words
-per page. Typical exercise density is 2–3 per compact chapter, 3–5 intermediate, and 5–8
-deep, with focused, applied, and synthesis practice rather than one omnibus prompt.
-For targets of 6 pages or fewer, the plan must contain 1 chapter, at most 3 exercises, and
-at most 1 visual. For 7–8 pages, it may contain at most 2 chapters, 6 exercises, and 2
-visuals.
+Agree audience, starting point, depth, scope, target capability, mode, must-cover topics,
+and relevant learner URLs. A durable persona informs teaching choices but is not a
+curriculum. Do not research until the learner confirms the book scope.
 
 ### B — Research
-`research-architect` → `research.json` (web search; follow `$research`).
-The architect owns finding real sources. Validate `production/research.json`.
 
-### C — Curriculum
-`curriculum-architect` → `book-plan.json` (include `target_pages` from the agreed
-scope). The plan `title` is the published book title (cover/PDF) — it should name the
-subject clearly, usually refined from `research.json`'s title. Inspect title, chapter
-order, total target words, exercise counts/assessment briefs, and visual purposes before
-accepting it. If the plan is weak, re-run the architect with a short fix brief—do not edit
-JSON yourself. Validate `production/book-plan.json` before creating editorial state, then
-validate `production/editorial-state.json`.
+Call `research-architect`; validate `production/research.json`. Formal subject evidence
+must be represented here with real HTTPS sources and source IDs.
 
-Create `production/editorial-state.json` after accepting the plan:
+### C — Lead-author manuscript
 
-```json
-{
-  "accepted_chapter_refs": [],
-  "established_concepts": [],
-  "terminology": {},
-  "running_system_state": [],
-  "reusable_examples": [],
-  "open_threads": []
-}
-```
+Call `lead-author` once with the complete confirmed brief. It owns plan and all prose in the
+same run. Validate `production/book-plan.json` and every chapter. For modern modes, each plan
+slice must explicitly define the reader's start, conceptual obstacle, intuition bridge,
+worked-example progression, mechanisms, misconceptions, evidence/demonstration, and
+practice progression. Call `forecast-textbook-pages` once after the full manuscript exists.
 
-### D — Per chapter (plan order)
-1. `chapter-writer` → chapter JSON **and** its figures (author calls the diagrammer)
-2. Validate the chapter JSON and referenced figure files
-3. Call `chapter-reviewer`, validate its review, and apply the editorial gate.
-4. Do not invoke the blind verifier for an editorially rejected draft.
-5. On approval, freeze prose/figures and update `production/editorial-state.json`.
-6. Call `independent-verifier` and validate its `BlindAnswers` artifact.
-7. In one response, call `solution-comparator` for this chapter and, if another chapter
-   remains, `chapter-writer` for the next chapter. They touch different files and run
-   concurrently.
-8. Validate and open the verification JSON; apply the exercise QA gate.
+If the lead author returns `invalid=...`, re-invoke it with the exact validation error. Do
+not manager-edit production JSON. Do not split initial modern authorship into unrelated
+chapter-writer calls.
 
-Never call two chapter writers concurrently. The next writer may start only after the
-previous chapter is editorially approved and recorded in editorial state.
+### D — Figures
 
-#### Editorial gate
+Call `html-diagram-author` once for each planned visual after prose exists. Validate the
+complete attached chapter. Do not send prose through a diagram-authoring loop.
 
-The reviewer is evidence, not the decision-maker. Inspect `decision`, `summary`, and every
-note. Confirm the draft fits the full plan and accepted book, not only its own chapter brief.
+### E — Reader-experience gate
 
-If the decision is `revise`, do not invoke the blind solver. Call `chapter-writer` with the
-chapter id and instruct it to read the existing chapter JSON and its `.review.json` from the
-shared filesystem, revise the chapter in place, and preserve everything unaffected by the
-notes. The review file is the canonical brief. Re-run the reviewer, then reopen the review.
-Repeat until `approve`. Do not stop after a failed rewrite.
+Call `reader-experience-editor` on every chapter in reading order. Validate and open
+`production/manuscript.review.json`. It must have all eight reader-experience scores.
+Approval requires every score at least 4.
 
-If the decision is `approve`, freeze prose and figures. Immediately update editorial state:
+On revise, call `lead-author` once with the canonical review path. It should implement all
+related notes together while preserving unaffected text, IDs, figures, and sources. Re-run
+the whole reader gate after any prose edit. Never start independent exercise QA before a
+fresh reader approval.
 
-- append the chapter id to `accepted_chapter_refs`
-- add concepts and canonical terms the reader can now rely on
-- record how the shared running system changed
-- record examples later chapters may reuse without re-explaining
-- keep only still-open promises in `open_threads`
+### F — Exercise QA
 
-The next chapter may now be drafted while this chapter's comparator runs.
+For every frozen chapter, call `independent-verifier`, validate its blind answers, then call
+`solution-comparator`. Different chapters may use the two tool slots concurrently. Inspect
+verification JSON; a status line is not evidence. For any non-approve verdict, pass the
+verification path to `lead-author` for exercise-only repair, then solve and compare again.
 
-#### If any verdict is `reject` or `revise`
-Do not publish, but an already-running next-chapter draft may finish because it depends only
-on frozen editorial content.
+### G — Publish and inspect
 
-1. Open the verification file and confirm every non-`approve` verdict is actionable.
-2. Call `chapter-writer` with the chapter id and exact existing chapter and
-   `.verification.json` paths. Tell it to modify only exercises, answers, and reasoning;
-   frozen prose, sections, figures, terminology, and bridges must remain unchanged.
-3. Re-run `independent-verifier` (fresh answers file).
-4. Re-run `solution-comparator`.
-5. Re-open `.verification.json`. Repeat the gate until every verdict is `approve`.
-   Do not stop because a previous rewrite failed, and do not publish broken exercises.
+Call `build-textbook-pdf`; it writes the current PDF and
+`production/publication-report.json`. Require deterministic quality and measured page fit
+inside the inclusive target ±15% range. Only this report—not word counts, images, or a
+forecast—can drive a fit revision.
 
-#### If every verdict is `approve`
-Chapter is QA-clear. Continue reviewing the next draft or publish when every planned chapter
-has both editorial approval and an all-approve verification file.
+Then call `publication-reviewer` once. It returns every PDF page as an individual preview
+image and must inspect them all. Validate and open `production/publication.review.json`.
+Finish only on a fresh approval. Route a material defect to the smallest owning stage,
+re-run all stale downstream gates, compile, and inspect the new PDF. Keep the latest PDF
+available during repair.
 
-Never treat a comparator tool status line as proof of approval — only the verification JSON
-on disk counts.
+## Recovery
 
-### E — Publish
-Only after **every** planned chapter has an all-`approve` `.verification.json` on disk.
-Call `build-textbook-pdf`. It writes the PDF and `production/publication-report.json`.
+Call `inspect-pipeline-state` at startup and after every gate. Execute its `next_actions`.
+Actions are `research-architect`, `lead-author:complete-manuscript`, a planned diagram,
+`reader-experience-editor` or `lead-author:manuscript-revision`, exercise QA, compile, and
+publication review. Existing books with an unscored manuscript approval return to the
+reader-experience editor once; old per-chapter review files are ignored.
 
-The requested page count is a target, not an exact hard limit. Accept any actual page count
-inside the report's inclusive 15%-tolerance range. This range uses whole-page outward
-rounding, so a six-page target accepts five through seven pages.
-
-If the measured result is outside the range:
-
-1. Keep the compiled PDF; it remains a usable artifact while fit is corrected.
-2. Read `production/publication-report.json` and identify the smallest scope correction.
-3. Call the affected `chapter-writer` with the existing chapter path and report path. Ask
-   for a targeted in-place prose-length revision, preserving exercises, figures, IDs, and
-   assets. Explicitly forbid calling the diagram author unless there is a separate visual
-   defect.
-4. Re-run editorial review and blind exercise QA for every changed chapter, update
-   editorial state, and compile again.
-
-Keep making targeted fit corrections and recompiling until the measured result is inside
-tolerance. Always leave the learner the latest compiled PDF, and report measured page count
-honestly while you continue. Never withhold an already compiled PDF solely because it missed
-the target.
-
-Do not estimate page consumption from PNG pixels, HTML dimensions, word-count arithmetic,
-or a reviewer's visual guess. Only the measured publication report determines page fit.
-
-## Error recovery
-
-- **missing sources / bad source_refs** → architect put URLs in `source_refs`. Retry with:
-  “Use source_id strings in source_refs; put URLs only on sources[].url.”
-- **two independent hosts** → need a second hostname, not a second path on the same site.
-- **missing production/X** → prior stage not on disk; run the prior step, don’t invent JSON.
+On any invalid artifact, give the exact error back to the producing specialist and keep
+repairing until valid. Never use publication to discover stale schemas. Never run two lead
+author calls concurrently.

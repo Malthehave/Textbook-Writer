@@ -201,3 +201,20 @@ def test_stream_emits_book_cost_data_parts() -> None:
     assert cost_parts[0]["transient"] is True
     assert cost_parts[0]["data"]["totals"]["requests"] == 0
     assert cost_parts[-1]["data"]["totals"]["requests"] == 1
+
+
+def test_astra_pricing_includes_cache_and_long_context() -> None:
+    cost, priced = estimate_call_cost_usd(
+        model_id="gpt-6-astra",
+        input_tokens=100_000,
+        cached_input_tokens=40_000,
+        cache_write_tokens=10_000,
+        output_tokens=10_000,
+    )
+    assert priced is True
+    assert cost == 1.165  # 50k input + 40k cached + 10k writes + 10k output
+    price = lookup_model_price("gpt-6-astra")
+    assert price is not None
+    assert price.rates_for(input_tokens=LONG_CONTEXT_INPUT_THRESHOLD) == (10, 1, 50, 12.5)
+    assert price.rates_for(input_tokens=LONG_CONTEXT_INPUT_THRESHOLD + 1) == (20, 2, 75, 25)
+    assert lookup_model_price("gpt-6-astra-2026-09-03") == price
