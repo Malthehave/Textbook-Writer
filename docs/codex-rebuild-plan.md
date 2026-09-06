@@ -1,6 +1,9 @@
 # Codex-only Textbook Writer rebuild
 
-Status: proposed implementation plan; no rebuild performed yet.
+Status: initial Codex-only implementation completed on `codex/codex-only-workflow`.
+This document preserves the original proposal; AGENTS.md, the skill and CLI define current behavior.
+The live implementation uses fresh-context, packet-only blind solving as a review protocol;
+it explicitly does not claim filesystem-enforced isolation. A learner-reviewed pilot is still pending.
 Checkpoint: `c888539` preserves the API-based application and current teaching lessons.
 
 ## Product and boundaries

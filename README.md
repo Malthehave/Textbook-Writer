@@ -1,104 +1,79 @@
 # Textbook Writer
 
-Textbook Writer is a manager-led textbook compiler. A learner-facing OpenAI Agents SDK
-manager commissions research, a single lead author, reader-experience editing,
-exercise-verification, diagram, and compiled-publication specialists, then publishes a
-measured Typst PDF. The default fast path is a quality slice: one substantial 1,500–2,200
-word chapter with a complete teaching progression, 2–3 exercises, at most one visual, and
-an 8–10 page target. It is short enough to iterate on without collapsing into an outline.
+Make books with Codex. Open this repository, describe what you want to learn, and ask
+Codex to use the `write-textbook` skill. Codex writes and researches the book, delegates
+specialist reviews, and uses local tools to publish a reviewed PDF.
 
-Each chat owns a retained directory under `output/books/<session-id>/`. Research,
-curriculum, chapters, reviews, blind answers, verification results, publication reports,
-and the compiled PDF are files on disk rather than claims held only in chat history.
+There is no web application, OpenAI Agents SDK, API key, or model-calling Python service.
+Use your normal Codex subscription sign-in; book work consumes its available usage.
 
-See [AGENTS.md](AGENTS.md) for the authoritative pipeline, artifact contracts, and
-non-negotiable production rules. See [DESIGN.md](DESIGN.md) for the UI design reference.
+## Setup
 
-## Run (hot reload)
+Install Python 3.12+, uv, Typst 0.15.1, and Poppler (`pdftoppm`). On macOS, Typst and
+Poppler are available through Homebrew. Then:
 
-Requirements: Docker with Compose and `OPENAI_API_KEY` in `.env` (copy `.env.example`;
-never commit the populated file). Typst, Chromium, and PDF tooling ship in the API image.
-
-```bash
-npm run build   # first time / when Docker deps change
-npm run dev     # day-to-day (hot reload)
-```
-
-- UI: http://localhost:3000 (Vite HMR)
-- API: http://localhost:8000 (uvicorn `--reload`)
-
-Also: `npm run down`, `npm run logs`, `npm test`. Edit `frontend/` or `src/` locally; containers pick up changes.
-
-Creating **New book** makes an empty `input/`, `state/`, `build/`, and `production/`
-workspace. Starting another book does not delete earlier sessions. The UI provides the
-manager chat, production progress, live nested-specialist activity, an artifact browser,
-PDF preview, per-book usage estimates, and the durable learner profile editor/interview.
-
-All agents default to GPT-6 Astra (`gpt-6-astra`), including the learner persona
-interviewer. Reasoning is medium for the manager, diagrams, and persona interview;
-research, authorship, manuscript/publication review, and exercise QA use high.
-Routing uses the selected base model throughout. Explicit per-role overrides remain
-available as `TEXTBOOK_MODEL_<ROLE>` (for example, `TEXTBOOK_MODEL_WRITER=gpt-6-astra`).
-The legacy `TEXTBOOK_MODEL_ROUTING` setting is no longer needed; it does not change routing.
-
-### Without Docker
-
-PDF publish needs `typst` (match `TYPST_VERSION` in `Dockerfile.api`). Prefer Docker so
-`/books` matches the deployment model in `AGENTS.md`.
-
-```bash
-brew install typst poppler
-uv sync
+```sh
+uv sync --frozen
 uv run playwright install chromium
-TEXTBOOK_BOOKS_ROOT=output/books uv run uvicorn textbook_writer.api.app:app --reload --port 8000
-
-cd frontend && npm install && npm run dev
+uv run textbook doctor
 ```
 
-Vite proxies `/api` → `:8000`.
+Math conversion uses the pinned MiTeX package emitted by md2typst. The first math build
+may need internet access to populate Typst's package cache. HTML figures must be
+self-contained: network and external local resource requests are blocked.
 
-## State and outputs
+## Make a book
 
-| Path | Contents |
-|---|---|
-| `output/ui-sessions.sqlite` | Session index and persisted nested-agent events |
-| `output/learner/persona.md` | Cross-book learner profile |
-| `output/books/<session-id>/production/` | Canonical validated book artifacts |
-| `output/books/<session-id>/state/` | Manager chat history and usage ledger |
-| `output/books/<session-id>/build/` | Latest learner PDF and optional solution manual |
+In Codex, ask:
 
-The API exposes read-only session endpoints for messages, artifacts, progress, usage,
-debug information, and the current PDF. The browser consumes these endpoints directly.
+> Use write-textbook to create a five-page introduction to how an AI chip computes a
+> weighted sum. I am a hardware beginner. Use labelled diagrams and worked examples,
+> explain notation before using it, and include two exercises with verified answers.
 
-## Debugging
+Codex confirms the scope, creates a retained book folder, researches, writes, illustrates,
+reviews, verifies exercises, compiles, and visually reviews all pages. One author owns the
+narrative; specialist subagents get bounded assignments. See [AGENTS.md](AGENTS.md).
 
-```bash
-npm run debug
-curl -s localhost:8000/api/sessions | python -m json.tool
-curl -s localhost:8000/api/sessions/<session-id>/debug | python -m json.tool
-curl -s localhost:8000/api/sessions/<session-id>/progress | python -m json.tool
+The blind solver receives an answer-free question packet in a fresh subagent context,
+without inherited author conversation, and is instructed to read only that packet.
+Shared-workspace subagents do not enforce filesystem isolation; use a restricted workspace
+when available. This is a review protocol, not a security guarantee. Any solve exposed to
+the author's draft answers must be discarded and repeated.
+
+## Local commands
+
+```sh
+uv run textbook init --book output/books/my-book
+uv run textbook status --book output/books/my-book
+uv run textbook render-figure --book output/books/my-book --id figure-id
+uv run textbook verification-packet --book output/books/my-book --destination /tmp/my-book-solver
+uv run textbook record-review --book output/books/my-book --stage reader --review /tmp/reader.json
+uv run textbook build --book output/books/my-book
+uv run textbook preview --book output/books/my-book
+uv run textbook validate --book output/books/my-book
+uv run --frozen pytest
 ```
 
-A run interrupted by an API reload or dropped browser stream may still have valid work in
-the session directory. Inspect canonical artifacts and progress before rerunning a stage.
+`status` reports the next required stage and review hashes; it is useful during partial
+work. `validate` returns a nonzero exit code until the entire book is ready for delivery.
+Reviewers must return the hash of the inputs they inspected. Changes to manuscript,
+answers, PDF or preview images invalidate the affected approvals. `build` requires fresh
+reader and answer-comparison approvals; `preview` renders all candidate pages. A final
+publication review is still required after compilation.
 
-## Verification
+Outputs: `build/book.pdf`, optional `build/book-solutions.pdf`, `build/report.json`, and
+page images under `build/previews/`. Page targets include companion pages when separate
+solutions are selected. A five-page target with ±15% tolerance requires five measured pages.
 
-```bash
-npm test
-cd frontend && npm run build
-```
+## Repository
 
-## Layout
+- `.agents/skills/write-textbook/`: discoverable workflow and teaching guidance.
+- `src/textbook_writer/cli.py`: local commands.
+- `src/textbook_writer/workflow.py`: artifact validation and review freshness.
+- `src/textbook_writer/publishing.py`: Markdown/Typst, HTML/PNG and PDF previews.
+- `output/books/`: retained books, ignored by Git.
+- `output/learner/persona.md`: optional learner context, ignored by Git.
 
-| Path | Role |
-|---|---|
-| `src/textbook_writer/api/` | FastAPI + Agents SDK → AI SDK stream |
-| `frontend/` | Vite React + Tailwind + `@ai-sdk/react` |
-| `src/textbook_writer/runtime/agents/` | Manager, specialists, prompts, and role-local skills |
-| `src/textbook_writer/runtime/workspace_tools.py` | Artifact validation and PDF publication tools |
-| `src/textbook_writer/runtime/pdf.py` | Typst assembly and PDF compile |
-| `src/textbook_writer/runtime/quality.py` | Page forecast and compiled-artifact checks |
-| `src/textbook_writer/runtime/model_routing.py` | Role-specific model routing |
-| `src/textbook_writer/models/` | Research and production Pydantic contracts |
-| `docker-compose.yml` | Dev API + frontend with live reload |
+Existing books from the old application are preserved but use a different artifact format.
+Do not run the new CLI on an old book directory. The old application is recoverable from
+Git checkpoint `0bf1ce6`. See [the rebuild plan](docs/codex-rebuild-plan.md) for rationale.
